@@ -1,24 +1,73 @@
-import { readStore, writeStore, makeId } from "../lib/storage";
-import { normalizeUsername } from "../lib/validators";
-import { mockUsers } from "../mocks/mockUsers";
 
-const seedUsers = () => {
-  const existing = readStore("users", null);
-  if (existing === null) writeStore("users", mockUsers);
-};
-export function getUsers() { seedUsers(); return readStore("users", []); }
-export function getUserById(id) { return getUsers().find((u) => u.id === id) || null; }
-export function getUserByUsername(username) {
-  const normalized = normalizeUsername(username);
-  return getUsers().find((u) => normalizeUsername(u.username) === normalized) || null;
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  where,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { normalizeUsername } from "../lib/validators";
+
+const USERS_COLLECTION = "users";
+
+export async function getUserById(id) {
+  const snapshot = await getDoc(doc(db, USERS_COLLECTION, id));
+
+  return snapshot.exists()
+    ? { id: snapshot.id, ...snapshot.data() }
+    : null;
 }
-export function createUser({ username, email, name, password }) {
-  seedUsers();
-  const users = readStore("users", []);
-  if (users.some((u) => normalizeUsername(u.username) === normalizeUsername(username))) throw new Error("Ese nombre de usuario ya está registrado.");
-  if (users.some((u) => (u.email || "").toLowerCase() === email.trim().toLowerCase())) throw new Error("Ese correo electrónico ya está registrado.");
-  // Prototipo local únicamente: la autenticación real debe delegarse a Firebase Auth.
-  const user = { id: makeId(), username: username.trim(), email: email.trim().toLowerCase(), name: (name || username).trim(), bio: "", avatar: (name || username).trim().slice(0, 2).toUpperCase(), demoPassword: password };
-  writeStore("users", [...users, user]);
-  return user;
+
+export async function getUserByUsername(username) {
+  const normalized = normalizeUsername(username);
+
+  const usersQuery = query(
+    collection(db, USERS_COLLECTION),
+    where("usernameLower", "==", normalized)
+  );
+
+  const snapshot = await getDocs(usersQuery);
+
+  if (snapshot.empty) return null;
+
+  const userDoc = snapshot.docs[0];
+
+  return { id: userDoc.id, ...userDoc.data() };
+}
+
+export async function getUsers() {
+  const snapshot = await getDocs(collection(db, USERS_COLLECTION));
+
+  return snapshot.docs.map((item) => ({
+    id: item.id,
+    ...item.data(),
+  }));
+}
+
+export async function createUserProfile(uid, values) {
+  const username = values.username.trim().replace(/^@/, "");
+  const usernameLower = normalizeUsername(username);
+
+  const existingUser = await getUserByUsername(usernameLower);
+
+  if (existingUser) {
+    throw new Error("Ese nombre de usuario ya está registrado.");
+  }
+
+  const profile = {
+    username,
+    usernameLower,
+    name: (values.name || username).trim(),
+    email: values.email.trim().toLowerCase(),
+    bio: "",
+    avatar: (values.name || username).trim().slice(0, 2).toUpperCase(),
+    createdAt: new Date().toISOString(),
+  };
+
+  await setDoc(doc(db, USERS_COLLECTION, uid), profile);
+
+  return { id: uid, ...profile };
 }

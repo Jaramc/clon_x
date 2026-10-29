@@ -1,19 +1,89 @@
-import { createContext, useEffect, useMemo, useState } from "react";
-import { getSession, loginUser, logoutUser, registerUser, loginWithGoogle } from "../services/authService";
+
+import {
+  createContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
+import {
+  loginUser,
+  logoutUser,
+  registerUser,
+  loginWithGoogle,
+} from "../services/authService";
+
 export const AuthContext = createContext(null);
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => getSession());
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const refresh = () => setUser(getSession());
-    window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const snapshot = await getDoc(
+          doc(db, "users", firebaseUser.uid)
+        );
+
+        setUser(
+          snapshot.exists()
+            ? { id: snapshot.id, ...snapshot.data() }
+            : null
+        );
+      } catch (error) {
+        console.error("Failed to load user profile:", error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return unsubscribe;
   }, []);
-  const value = useMemo(() => ({
-    user,
-    register: (values) => { const next = registerUser(values); setUser(next); return next; },
-    login: (username, password) => { const next = loginUser(username, password); setUser(next); return next; },
-    loginGoogle: async () => { const next = await loginWithGoogle(); setUser(next); return next; },
-    logout: () => { logoutUser(); setUser(null); }
-  }), [user]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+
+      register: async (values) => {
+        const next = await registerUser(values);
+        setUser(next);
+        return next;
+      },
+
+      login: async (username, password) => {
+        const next = await loginUser(username, password);
+        setUser(next);
+        return next;
+      },
+
+      loginGoogle: async () => {
+        const next = await loginWithGoogle();
+        setUser(next);
+        return next;
+      },
+
+      logout: async () => {
+        await logoutUser();
+        setUser(null);
+      },
+    }),
+    [user, loading]
+  );
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
