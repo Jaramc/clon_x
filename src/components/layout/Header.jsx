@@ -1,31 +1,30 @@
-
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import './Header.css';
 
+// Basic Header component with logo, username, and logout button
 function Header() {
-  const { user, logout } = useAuth();
+  // Mock user data for Milestone 1
+  const currentUser = {
+    username: 'ximena_j',
+  };
+
+  // Simple handler to simulate logout
+  const handleLogout = () => {
+    // eslint-disable-next-line no-alert
+    alert('Has cerrado sesión');
+  };
+
   return (
     <header className="header">
+      {/* Logo link back to home */}
       <Link to="/" className="header-logo" aria-label="Ir al inicio">
         𝕏
       </Link>
 
-      <nav className="header-nav" aria-label="Navegación principal">
-        <Link to="/">Inicio</Link>
-        <Link to="/feed">Feed</Link>
-        <Link to="/following">Seguidos</Link>
-        <Link to="/followers">Seguidores</Link>
-      </nav>
-
+      {/* User info and logout button */}
       <div className="header-user">
-        <span>@{user?.username || 'invitado'}</span>
-
-        <button
-          type="button"
-          className="logout-button"
-          onClick={logout}
-        >
+        <span>@{currentUser.username}</span>
+        <button type="button" className="logout-button" onClick={handleLogout}>
           Cerrar sesión
         </button>
       </div>

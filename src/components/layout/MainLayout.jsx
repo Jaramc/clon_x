@@ -1,16 +1,12 @@
-
 import { Outlet } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import Header from './Header';
 import './MainLayout.css';
 
+// Main layout wrapper with Header at top and page content below
 function MainLayout() {
-  const { user, logout } = useAuth();
-
   return (
     <div className="main-layout">
-      <Header user={user} onLogout={logout} />
-
+      <Header />
       <main className="main-content">
         <Outlet />
       </main>
