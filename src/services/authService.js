@@ -69,17 +69,11 @@ export async function registerUser(values) {
   }
 }
 
-export async function loginUser(username, password) {
-  const user = await getUserByUsername(normalizeUsername(username));
-
-  if (!user?.email) {
-    throw new Error("Usuario o contraseña incorrectos.");
-  }
-
+export async function loginUser(email, password) {
   try {
     const credential = await signInWithEmailAndPassword(
       auth,
-      user.email,
+      email.trim().toLowerCase(),
       password
     );
 
@@ -88,18 +82,22 @@ export async function loginUser(username, password) {
     );
 
     if (!snapshot.exists()) {
-      await signOut(auth);
-      throw new Error("No se encontró el perfil de este usuario.");
+      throw new Error(
+        "La cuenta existe, pero no tiene un perfil registrado en Firestore."
+      );
     }
 
-    return { id: snapshot.id, ...snapshot.data() };
+    return {
+      id: snapshot.id,
+      ...snapshot.data(),
+    };
   } catch (error) {
     if (
       error.code === "auth/invalid-credential" ||
       error.code === "auth/user-not-found" ||
       error.code === "auth/wrong-password"
     ) {
-      throw new Error("Usuario o contraseña incorrectos.");
+      throw new Error("Correo o contraseña incorrectos.");
     }
 
     throw error;

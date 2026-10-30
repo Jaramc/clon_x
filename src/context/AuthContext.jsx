@@ -61,8 +61,8 @@ export function AuthProvider({ children }) {
         return next;
       },
 
-      login: async (username, password) => {
-        const next = await loginUser(username, password);
+      login: async (email, password) => {
+        const next = await loginUser(email, password);
         setUser(next);
         return next;
       },

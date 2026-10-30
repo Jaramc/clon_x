@@ -8,13 +8,16 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+
+import { auth, db } from "../lib/firebase";
 import { normalizeUsername } from "../lib/validators";
 
 const USERS_COLLECTION = "users";
 
 export async function getUserById(id) {
-  const snapshot = await getDoc(doc(db, USERS_COLLECTION, id));
+  const snapshot = await getDoc(
+    doc(db, USERS_COLLECTION, id)
+  );
 
   return snapshot.exists()
     ? { id: snapshot.id, ...snapshot.data() }
@@ -22,6 +25,10 @@ export async function getUserById(id) {
 }
 
 export async function getUserByUsername(username) {
+  if (!auth.currentUser) {
+    throw new Error("Debes iniciar sesión.");
+  }
+
   const normalized = normalizeUsername(username);
 
   const usersQuery = query(
@@ -35,11 +42,20 @@ export async function getUserByUsername(username) {
 
   const userDoc = snapshot.docs[0];
 
-  return { id: userDoc.id, ...userDoc.data() };
+  return {
+    id: userDoc.id,
+    ...userDoc.data(),
+  };
 }
 
 export async function getUsers() {
-  const snapshot = await getDocs(collection(db, USERS_COLLECTION));
+  if (!auth.currentUser) {
+    throw new Error("Debes iniciar sesión.");
+  }
+
+  const snapshot = await getDocs(
+    collection(db, USERS_COLLECTION)
+  );
 
   return snapshot.docs.map((item) => ({
     id: item.id,
@@ -48,6 +64,10 @@ export async function getUsers() {
 }
 
 export async function createUserProfile(uid, values) {
+  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error("No tienes permiso para crear este perfil.");
+  }
+
   const username = values.username.trim().replace(/^@/, "");
   const usernameLower = normalizeUsername(username);
 
@@ -63,11 +83,20 @@ export async function createUserProfile(uid, values) {
     name: (values.name || username).trim(),
     email: values.email.trim().toLowerCase(),
     bio: "",
-    avatar: (values.name || username).trim().slice(0, 2).toUpperCase(),
+    avatar: (values.name || username)
+      .trim()
+      .slice(0, 2)
+      .toUpperCase(),
     createdAt: new Date().toISOString(),
   };
 
-  await setDoc(doc(db, USERS_COLLECTION, uid), profile);
+  await setDoc(
+    doc(db, USERS_COLLECTION, uid),
+    profile
+  );
 
-  return { id: uid, ...profile };
+  return {
+    id: uid,
+    ...profile,
+  };
 }
