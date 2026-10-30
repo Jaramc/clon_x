@@ -1,22 +1,17 @@
+import { Navigate, Outlet } from 'react-router-dom';
 
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+// Basic protected route component for beginner level
+function ProtectedRoute({ children }) {
+  // Mock authentication variable for Milestone 1 (change to false to test redirect)
+  const isAuthenticated = true;
 
-function ProtectedRoute({children}) {
-  const { user } = useAuth();
-  const location = useLocation();
-
-  if (!user) {
-    return (
-      <Navigate
-        to="/login"
-        state={{ from: location }}
-        replace
-      />
-    );
+  // If the user is not authenticated, redirect to the login page
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
-  return children ?? <Outlet />;
+  // If authenticated, render child components or nested Outlet
+  return children || <Outlet />;
 }
 
 export default ProtectedRoute;
