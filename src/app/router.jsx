@@ -56,6 +56,14 @@ const router = createBrowserRouter([
         path: 'users/:username',
         element: <UserTweetsPage />,
       },
+      {
+        path: 'users/:username/followers',
+        element: <FollowersPage />,
+      },
+      {
+        path: 'users/:username/following',
+        element: <FollowingPage />,
+      },
     ],
   },
   {

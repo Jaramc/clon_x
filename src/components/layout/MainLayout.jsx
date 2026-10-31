@@ -13,7 +13,7 @@ export default function MainLayout({ children }) {
         <div className="side-panel">
           <h3>¿Qué está pasando?</h3>
           <p>Comparte ideas, sigue conversaciones y encuentra nuevas voces en Clon X.</p>
-          <small>Proyecto académico · Milestone 2</small>
+          <small>Proyecto académico · Milestone 3</small>
         </div>
         <div className="side-footer">
           Condiciones · Privacidad · Accesibilidad

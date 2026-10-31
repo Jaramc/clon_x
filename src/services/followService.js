@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   setDoc,
   where,
@@ -60,11 +61,32 @@ export async function getFollowerIds(userId) {
 // Get full profile objects of users that a person is following
 export async function getFollowingUsers(userId) {
   const ids = await getFollowingIds(userId);
+  if (!ids || ids.length === 0) return [];
+
   try {
-    const users = await getUsers();
-    const result = users.filter((u) => ids.includes(u.id || u.uid));
-    return result.length > 0 ? result : mockUsers.filter((u) => ids.includes(u.uid || u.id));
+    const allUsers = await getUsers();
+    const userMap = new Map();
+    (allUsers || []).forEach((u) => userMap.set(u.id || u.uid, u));
+    mockUsers.forEach((u) => {
+      const uid = u.id || u.uid;
+      if (!userMap.has(uid)) userMap.set(uid, u);
+    });
+
+    const result = [];
+    for (const id of ids) {
+      if (userMap.has(id)) {
+        result.push(userMap.get(id));
+      } else {
+        const fetched = await getUserById(id);
+        if (fetched) {
+          userMap.set(id, fetched);
+          result.push(fetched);
+        }
+      }
+    }
+    return result;
   } catch (error) {
+    console.warn('Falling back to mock users for following list:', error.message);
     return mockUsers.filter((u) => ids.includes(u.uid || u.id));
   }
 }
@@ -77,11 +99,32 @@ export function getFollowing(userId) {
 // Get full profile objects of users that follow a person
 export async function getFollowerUsers(userId) {
   const ids = await getFollowerIds(userId);
+  if (!ids || ids.length === 0) return [];
+
   try {
-    const users = await getUsers();
-    const result = users.filter((u) => ids.includes(u.id || u.uid));
-    return result.length > 0 ? result : mockUsers.filter((u) => ids.includes(u.uid || u.id));
+    const allUsers = await getUsers();
+    const userMap = new Map();
+    (allUsers || []).forEach((u) => userMap.set(u.id || u.uid, u));
+    mockUsers.forEach((u) => {
+      const uid = u.id || u.uid;
+      if (!userMap.has(uid)) userMap.set(uid, u);
+    });
+
+    const result = [];
+    for (const id of ids) {
+      if (userMap.has(id)) {
+        result.push(userMap.get(id));
+      } else {
+        const fetched = await getUserById(id);
+        if (fetched) {
+          userMap.set(id, fetched);
+          result.push(fetched);
+        }
+      }
+    }
+    return result;
   } catch (error) {
+    console.warn('Falling back to mock users for followers list:', error.message);
     return mockUsers.filter((u) => ids.includes(u.uid || u.id));
   }
 }
@@ -103,72 +146,153 @@ export async function getFollowCounts(userId) {
   };
 }
 
-// Follow a user by their @username
-export async function followByUsername(currentUser, username) {
-  const followerId = currentUser?.id || currentUser?.uid || getAuthenticatedUserId();
+// Real-time listener for follow counts
+export function subscribeToFollowCounts(userId, callback) {
+  if (!userId || typeof callback !== 'function') return () => {};
 
-  if (!followerId) {
+  let followingCount = 0;
+  let followersCount = 0;
+
+  let unsubFollowing = () => {};
+  let unsubFollowers = () => {};
+
+  try {
+    const followingQuery = query(
+      collection(db, FOLLOWS_COLLECTION),
+      where('followerId', '==', userId)
+    );
+    unsubFollowing = onSnapshot(
+      followingQuery,
+      (snapshot) => {
+        followingCount = snapshot.size;
+        callback({ followingCount, followersCount });
+      },
+      (error) => {
+        console.warn('Real-time following count error:', error.message);
+      }
+    );
+
+    const followersQuery = query(
+      collection(db, FOLLOWS_COLLECTION),
+      where('followingId', '==', userId)
+    );
+    unsubFollowers = onSnapshot(
+      followersQuery,
+      (snapshot) => {
+        followersCount = snapshot.size;
+        callback({ followingCount, followersCount });
+      },
+      (error) => {
+        console.warn('Real-time followers count error:', error.message);
+      }
+    );
+  } catch (err) {
+    console.warn('Error setting up follow count listeners:', err.message);
+  }
+
+  return () => {
+    unsubFollowing();
+    unsubFollowers();
+  };
+}
+
+// Check if a user is following another user
+export async function isFollowing(followerId, followingId) {
+  const fId = typeof followerId === 'object' ? followerId?.id || followerId?.uid : followerId;
+  const tId = typeof followingId === 'object' ? followingId?.id || followingId?.uid : followingId;
+
+  if (!fId || !tId) return false;
+  try {
+    const followRef = doc(db, FOLLOWS_COLLECTION, `${fId}_${tId}`);
+    const snapshot = await getDoc(followRef);
+    return snapshot.exists();
+  } catch (error) {
+    return localFollows.some((f) => f.followerId === fId && f.followingId === tId);
+  }
+}
+
+// Real-time listener for single relationship status
+export function subscribeToFollowStatus(followerId, followingId, callback) {
+  const fId = typeof followerId === 'object' ? followerId?.id || followerId?.uid : followerId;
+  const tId = typeof followingId === 'object' ? followingId?.id || followingId?.uid : followingId;
+
+  if (!fId || !tId || typeof callback !== 'function') return () => {};
+
+  try {
+    const followRef = doc(db, FOLLOWS_COLLECTION, `${fId}_${tId}`);
+    return onSnapshot(
+      followRef,
+      (snapshot) => {
+        callback(snapshot.exists());
+      },
+      (error) => {
+        console.warn('Real-time follow status error:', error.message);
+      }
+    );
+  } catch (err) {
+    console.warn('Error setting up follow status listener:', err.message);
+    return () => {};
+  }
+}
+
+// Follow a user by their user ID or user object
+export async function followUser(currentUserOrFollowerId, targetUserOrFollowingId) {
+  const followerId =
+    typeof currentUserOrFollowerId === 'object'
+      ? currentUserOrFollowerId?.id || currentUserOrFollowerId?.uid
+      : currentUserOrFollowerId || getAuthenticatedUserId();
+
+  const targetId =
+    typeof targetUserOrFollowingId === 'object'
+      ? targetUserOrFollowingId?.id || targetUserOrFollowingId?.uid
+      : targetUserOrFollowingId;
+
+  if (!followerId || !targetId) {
     throw new Error('Debes iniciar sesión para seguir usuarios.');
   }
-
-  const target = await getUserByUsername(username);
-  if (!target) {
-    throw new Error('No encontramos un usuario con ese nombre.');
-  }
-
-  const targetId = target.id || target.uid;
-  if (targetId === followerId) {
+  if (followerId === targetId) {
     throw new Error('No puedes seguirte a ti mismo.');
   }
 
   const followId = `${followerId}_${targetId}`;
-
   try {
     const followRef = doc(db, FOLLOWS_COLLECTION, followId);
-    const existingDoc = await getDoc(followRef);
-
-    if (existingDoc.exists()) {
-      throw new Error('Ya sigues a este usuario.');
-    }
-
     await setDoc(followRef, {
       followerId,
       followingId: targetId,
       createdAt: new Date().toISOString(),
     });
   } catch (error) {
-    if (error.message === 'Ya sigues a este usuario.') throw error;
-    console.warn('Falling back to local in-memory follow:', error.message);
-    const exists = localFollows.some((f) => f.followerId === followerId && f.followingId === targetId);
-    if (exists) throw new Error('Ya sigues a este usuario.');
-    localFollows.push({ followerId, followingId: targetId });
+    console.warn('Falling back to local follow:', error.message);
   }
 
-  return target;
-}
-
-// Check if a user is following another user
-export async function isFollowing(followerId, followingId) {
-  if (!followerId || !followingId) return false;
-  try {
-    const followRef = doc(db, FOLLOWS_COLLECTION, `${followerId}_${followingId}`);
-    const snapshot = await getDoc(followRef);
-    return snapshot.exists();
-  } catch (error) {
-    return localFollows.some((f) => f.followerId === followerId && f.followingId === followingId);
+  const exists = localFollows.some(
+    (f) => f.followerId === followerId && f.followingId === targetId
+  );
+  if (!exists) {
+    localFollows.push({
+      followerId,
+      followingId: targetId,
+      createdAt: new Date().toISOString(),
+    });
   }
+
+  return true;
 }
 
 // Unfollow a user
-export async function unfollowUser(currentUserOrFollowerId, targetIdOrFollowingId) {
+export async function unfollowUser(currentUserOrFollowerId, targetUserOrFollowingId) {
   const followerId =
     typeof currentUserOrFollowerId === 'object'
       ? currentUserOrFollowerId?.id || currentUserOrFollowerId?.uid
       : currentUserOrFollowerId || getAuthenticatedUserId();
 
-  const targetId = targetIdOrFollowingId;
+  const targetId =
+    typeof targetUserOrFollowingId === 'object'
+      ? targetUserOrFollowingId?.id || targetUserOrFollowingId?.uid
+      : targetUserOrFollowingId;
 
-  if (!targetId || targetId === followerId) {
+  if (!followerId || !targetId || targetId === followerId) {
     throw new Error('El usuario indicado no es válido.');
   }
 
@@ -188,26 +312,29 @@ export async function unfollowUser(currentUserOrFollowerId, targetIdOrFollowingI
   return true;
 }
 
-// Follow a user by their user ID
-export async function followUser(followerId, followingId) {
-  if (!followerId || !followingId) {
-    throw new Error('Los identificadores son obligatorios');
-  }
-  if (followerId === followingId) {
-    throw new Error('No puedes seguirte a ti mismo');
+// Follow a user by their @username
+export async function followByUsername(currentUser, username) {
+  const followerId = currentUser?.id || currentUser?.uid || getAuthenticatedUserId();
+
+  if (!followerId) {
+    throw new Error('Debes iniciar sesión para seguir usuarios.');
   }
 
-  const followId = `${followerId}_${followingId}`;
-  try {
-    const followRef = doc(db, FOLLOWS_COLLECTION, followId);
-    await setDoc(followRef, {
-      followerId,
-      followingId,
-      createdAt: new Date().toISOString(),
-    });
-    return true;
-  } catch (error) {
-    localFollows.push({ followerId, followingId });
-    return true;
+  const target = await getUserByUsername(username);
+  if (!target) {
+    throw new Error('No encontramos un usuario con ese nombre.');
   }
+
+  const targetId = target.id || target.uid;
+  if (targetId === followerId) {
+    throw new Error('No puedes seguirte a ti mismo.');
+  }
+
+  const alreadyFollowing = await isFollowing(followerId, targetId);
+  if (alreadyFollowing) {
+    throw new Error('Ya sigues a este usuario.');
+  }
+
+  await followUser(followerId, targetId);
+  return target;
 }
