@@ -6,7 +6,8 @@ import ChirpCard from '../components/common/ChirpCard';
 import EmptyState from '../components/common/EmptyState';
 import Spinner from '../components/common/Spinner';
 import Pagination from '../components/common/Pagination';
-import { followByUsername, getFollowingUsers } from '../services/followService';
+import FollowSearchForm from '../components/common/FollowSearchForm';
+import { getFollowingUsers } from '../services/followService';
 import { getTweetsByUsers } from '../services/tweetService';
 
 // Following page with follow-by-username action, real Firestore data, alphabetical sort, and pagination
@@ -16,15 +17,12 @@ export default function FollowingPage() {
   const [followingIds, setFollowingIds] = useState([]);
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
-  const [target, setTarget] = useState('');
-  const [message, setMessage] = useState('');
-
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
 
   const [showListTweets, setShowListTweets] = useState(false);
   const [listTweets, setListTweets] = useState([]);
   const [tweetsLoading, setTweetsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const userId = user?.id || user?.uid;
 
@@ -37,6 +35,7 @@ export default function FollowingPage() {
     }
 
     setLoading(true);
+    setError('');
 
     try {
       const followedUsers = await getFollowingUsers(userId);
@@ -46,7 +45,7 @@ export default function FollowingPage() {
       setUsers(followedUsers || []);
     } catch (err) {
       console.error('Error cargando seguidos:', err);
-      setMessage(err?.message || 'No se pudo cargar la lista de seguidos.');
+      setError(err?.message || 'No se pudo cargar la lista de seguidos.');
     } finally {
       setLoading(false);
     }
@@ -55,26 +54,6 @@ export default function FollowingPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleFollowSubmit = async (event) => {
-    event.preventDefault();
-    if (!target.trim()) return;
-
-    setMessage('');
-    setBusy(true);
-
-    try {
-      const followed = await followByUsername(user, target.trim());
-      setTarget('');
-      setMessage(`Ahora sigues a @${followed.username}.`);
-      await loadData();
-    } catch (err) {
-      console.error('Error siguiendo usuario:', err);
-      setMessage(err?.message || 'No se pudo seguir a ese usuario.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const toggleListTweets = async () => {
     if (showListTweets) {
@@ -90,7 +69,7 @@ export default function FollowingPage() {
       setShowListTweets(true);
     } catch (err) {
       console.error('Error cargando publicaciones:', err);
-      setMessage(err?.message || 'No se pudieron cargar las publicaciones.');
+      setError(err?.message || 'No se pudieron cargar las publicaciones.');
     } finally {
       setTweetsLoading(false);
     }
@@ -135,36 +114,8 @@ export default function FollowingPage() {
         </p>
       </header>
 
-      <form className="follow-search" onSubmit={handleFollowSubmit} style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
-        <label htmlFor="follow-username" style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
-          Seguir por nombre de usuario
-        </label>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            id="follow-username"
-            value={target}
-            onChange={(event) => setTarget(event.target.value)}
-            placeholder="@nombredeusuario"
-            required
-            style={{ flex: 1 }}
-          />
-
-          <button className="button" disabled={busy || !user} type="submit">
-            {busy ? 'Buscando...' : 'Seguir'}
-          </button>
-        </div>
-
-        {message && (
-          <p
-            className={message.startsWith('Ahora') ? 'success-message' : 'form-error'}
-            role="status"
-            style={{ marginTop: '8px' }}
-          >
-            {message}
-          </p>
-        )}
-      </form>
+      {/* Visual form to follow by @username with instant validation */}
+      <FollowSearchForm onFollowSuccess={loadData} />
 
       <div className="list-tweets-action" style={{ padding: '12px 16px' }}>
         <button
@@ -204,6 +155,10 @@ export default function FollowingPage() {
 
       {loading ? (
         <Spinner />
+      ) : error ? (
+        <p className="form-error" role="alert" style={{ padding: '16px' }}>
+          {error}
+        </p>
       ) : paginatedItems.length > 0 ? (
         <>
           <div>
