@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-
+// Initial mock follow relationships
 export const mockFollows = [
   {
     followerId: 'user-101',
@@ -18,6 +17,5 @@ export const mockFollows = [
     followingId: 'user-102',
   },
 ];
-=======
-export const mockFollows = [];
->>>>>>> origin/feature/spa
+
+export default mockFollows;

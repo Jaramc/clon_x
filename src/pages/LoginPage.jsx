@@ -1,17 +1,17 @@
-<<<<<<< HEAD
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { loginUser } from '../services/authService';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import useAuth from '../hooks/useAuth';
 
-function LoginPage() {
-  const { user, setUser } = useAuth();
+// Login page with email/username and Google authentication
+export default function LoginPage() {
+  const { user, login, loginGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const destination = location.state?.from
     ? `${location.state.from.pathname}${location.state.from.search || ''}`
@@ -21,79 +21,92 @@ function LoginPage() {
     return <Navigate to={destination} replace />;
   }
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setBusy(true);
 
     try {
-      const authenticatedUser = loginUser(username.trim(), password);
-
-      setUser(authenticatedUser);
-
+      await login(username.trim(), password);
       navigate(destination, { replace: true });
-    } catch (error) {
-      setError(error.message);
+    } catch (err) {
+      setError(err?.message || 'Error al iniciar sesión');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setBusy(true);
+
+    try {
+      await loginGoogle();
+      navigate(destination, { replace: true });
+    } catch (err) {
+      setError(err?.message || 'Error al iniciar sesión con Google');
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <section className="login-page">
-      <h1>Iniciar sesión en X</h1>
-      <p>Bienvenido al Clon de X</p>
+    <div className="auth-page">
+      <div className="auth-brand">𝕏</div>
+      <h1>Inicia sesión en Clon X</h1>
+      <p className="muted">Bienvenido de nuevo.</p>
 
-      <form onSubmit={handleLogin}>
-        <div>
-          <label htmlFor="username">Usuario</label>
+      <form onSubmit={handleLogin} className="form-stack">
+        <label>
+          Correo o nombre de usuario
           <input
-            id="username"
-            type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Nombre de usuario"
             required
+            autoComplete="username"
+            placeholder="correo@ejemplo.com o @usuario"
           />
-        </div>
+        </label>
 
-        <div>
-          <label htmlFor="password">Contraseña</label>
+        <label>
+          Contraseña
           <input
-            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña"
             required
+            autoComplete="current-password"
+            placeholder="Contraseña"
           />
+        </label>
+
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" className="button button--wide" disabled={busy}>
+          {busy ? 'Iniciando sesión...' : 'Iniciar sesión'}
+        </button>
+
+        <div className="or-divider">
+          <span>o</span>
         </div>
 
-        {error && <p role="alert">{error}</p>}
-
-        <button type="submit">Iniciar sesión</button>
+        <button
+          type="button"
+          className="button button--google"
+          onClick={handleGoogleLogin}
+          disabled={busy}
+        >
+          Continuar con Google
+        </button>
       </form>
-    </section>
+
+      <p className="auth-switch">
+        ¿No tienes cuenta? <Link to="/register">Regístrate</Link>
+      </p>
+    </div>
   );
 }
-
-export default LoginPage;
-=======
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import useAuth from "../hooks/useAuth";
-export default function LoginPage() {
-  const { login, loginGoogle } = useAuth(); const navigate = useNavigate();
-  const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState("");
-  const submit = async (e) => {
-    e.preventDefault();
-    setError("");
-
-    try {
-      await login(username, password);
-      navigate("/");
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-  const google = async () => { try { await loginGoogle(); navigate("/"); } catch (err) { setError(err.message); } };
-  return <div className="auth-page"><div className="auth-brand">𝕏</div><h1>Inicia sesión en Clon X</h1><form onSubmit={submit} className="form-stack"><label>Nombre de usuario<input value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" placeholder="@usuario" /></label><label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--wide">Iniciar sesión</button><div className="or-divider"><span>o</span></div><button type="button" className="button button--google" onClick={google}>Continuar con Google</button></form><p className="auth-switch">¿No tienes cuenta? <Link to="/register">Regístrate</Link></p><p className="fine-print">Google requiere configurar Firebase Authentication.</p></div>;
-}
->>>>>>> origin/feature/spa

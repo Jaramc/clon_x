@@ -1,128 +1,104 @@
-
-<<<<<<< HEAD
 import { useState } from 'react';
-import './FollowButton.css';
+import { followUser, unfollowUser } from '../../services/followService';
 
-function FollowButton({
-  isFollowing = false,
-  onToggle,
-  disabled = false,
-}) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleClick = async () => {
-    if (loading || disabled || typeof onToggle !== 'function') {
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      await onToggle();
-    } catch (err) {
-      setError(err?.message || 'No se pudo actualizar el seguimiento');
-    } finally {
-      setLoading(false);
-=======
-import { useState } from "react";
-
-import {
-  followByUsername,
-  unfollowUser,
-} from "../../services/followService";
-
+// Reusable follow toggle button supporting both manual toggle callback and direct user entity
 export default function FollowButton({
   user,
   currentUser,
   following,
+  isFollowing,
   onChange,
+  onToggle,
+  disabled = false,
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
+  const [isHovered, setIsHovered] = useState(false);
 
-  const handleFollow = async () => {
-    if (busy) return;
+  const activeFollowing = following !== undefined ? Boolean(following) : Boolean(isFollowing);
+
+  const targetId = user?.id || user?.uid;
+  const currentUserId = currentUser?.id || currentUser?.uid;
+
+  // Prevent rendering if user tries to follow themselves
+  if (currentUserId && targetId && currentUserId === targetId) {
+    return null;
+  }
+
+  const handleAction = async (e) => {
+    e?.stopPropagation?.();
+    if (busy || disabled) return;
 
     setBusy(true);
-    setError("");
+    setError('');
 
     try {
-      if (following) {
-        await unfollowUser(currentUser, user.id);
-      } else {
-        await followByUsername(
-          currentUser,
-          user.username
-        );
+      if (user && targetId) {
+        if (activeFollowing) {
+          await unfollowUser(currentUser, targetId);
+        } else {
+          await followUser(currentUser, targetId);
+        }
+      } else if (typeof onToggle === 'function') {
+        await onToggle();
       }
 
-      if (onChange) {
-        await onChange();
+      if (typeof onChange === 'function') {
+        await onChange(!activeFollowing);
       }
     } catch (err) {
-      console.error("Error al actualizar seguimiento:", {
-        code: err.code,
-        message: err.message,
-      });
-
-      setError(
-        err.message || "No se pudo actualizar el seguimiento."
-      );
+      console.error('Error al actualizar seguimiento:', err);
+      setError(err?.message || 'No se pudo actualizar el seguimiento.');
+      setTimeout(() => setError(''), 4000);
     } finally {
       setBusy(false);
->>>>>>> origin/feature/spa
     }
   };
 
+  const getButtonText = () => {
+    if (busy) return 'Procesando...';
+    if (activeFollowing) {
+      return isHovered ? 'Dejar de seguir' : 'Siguiendo';
+    }
+    return 'Seguir';
+  };
+
+  const getButtonClass = () => {
+    if (activeFollowing) {
+      return isHovered
+        ? 'button button--outline button--danger'
+        : 'button button--outline';
+    }
+    return 'button';
+  };
+
   return (
-<<<<<<< HEAD
-    <div className="follow-control">
+    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
       <button
         type="button"
-        className={`follow-button ${isFollowing ? 'following' : ''}`}
-        onClick={handleClick}
-        disabled={loading || disabled || !onToggle}
-        aria-pressed={isFollowing}
+        className={getButtonClass()}
+        onClick={handleAction}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        disabled={busy || disabled}
+        aria-pressed={activeFollowing}
+        aria-busy={busy}
+        style={{
+          minWidth: '105px',
+          transition: 'all 0.15s ease',
+          borderColor: activeFollowing && isHovered ? '#ff4d4f' : undefined,
+          color: activeFollowing && isHovered ? '#ff4d4f' : undefined,
+        }}
       >
-        {loading ? 'Procesando...' : isFollowing ? 'Siguiendo' : 'Seguir'}
+        {getButtonText()}
       </button>
 
       {error && (
-        <span className="follow-error" role="alert">
+        <span className="form-error" role="alert" style={{ fontSize: '11px', marginTop: '2px' }}>
           {error}
         </span>
-=======
-    <div>
-      <button
-        className={
-          following
-            ? "button button--outline"
-            : "button"
-        }
-        onClick={handleFollow}
-        disabled={busy}
-        type="button"
-      >
-        {busy
-          ? "Procesando..."
-          : following
-            ? "Siguiendo"
-            : "Seguir"}
-      </button>
-
-      {error && (
-        <small className="form-error" role="alert">
-          {error}
-        </small>
->>>>>>> origin/feature/spa
       )}
     </div>
   );
 }
-<<<<<<< HEAD
 
-export default FollowButton;
-=======
->>>>>>> origin/feature/spa

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # BITÁCORA DE DESARROLLO — INTEGRANTE 3
 
 **Proyecto:** Clon de X (Twitter)  
@@ -132,10 +131,12 @@ El Pull Request #4 permanece abierto, sin conflictos de integración y con una r
 El desarrollo permitió aplicar conceptos de React, componentes reutilizables, hooks, manejo de estados, autenticación simulada, enrutamiento, paginación y control de versiones.
 
 Las funcionalidades implementadas contribuyen a la interacción entre usuarios dentro del proyecto Clon de X y establecen una base para futuras integraciones con servicios y bases de datos reales.
-=======
-# Bitácora de uso de asistentes de IA  
 
-**Proyecto:** clon_x  
+---
+
+# BITÁCORA DE USO DE ASISTENTES DE IA
+
+**Proyecto:** Clon de X (`clon_x`)  
 **Herramienta:** ChatGPT  
 **Modelo:** GPT-6  
 **Periodo:** Octubre de 2026
@@ -229,4 +230,3 @@ Las funcionalidades implementadas contribuyen a la interacción entre usuarios d
 ---
 
 **Alcance de la asistencia:** La ayuda de ChatGPT se limitó a la integración de Firebase, la configuración de autenticación, la revisión de permisos de Firestore y la solución de errores relacionados con estos servicios. El desarrollo de las demás funcionalidades de la aplicación fue realizado por el equipo.
->>>>>>> origin/feature/spa

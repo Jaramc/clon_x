@@ -1,49 +1,108 @@
-<<<<<<< HEAD
-import React, { useContext } from 'react';
-import { Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { useEffect, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import useAuth from '../hooks/useAuth';
+import FeedPage from './FeedPage';
+import FollowSearchForm from '../components/common/FollowSearchForm';
 
+// Home page with real-time Firestore followers/following counters and integrated feed
 export default function HomePage() {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useAuth();
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followersCount, setFollowersCount] = useState(0);
 
-  // Si el usuario aún no carga, mostramos un mensaje básico
+  const userId = user?.id || user?.uid;
+
+  // Real-time listener for followers and following counts on the 'follows' collection
+  useEffect(() => {
+    if (!userId) {
+      setFollowingCount(0);
+      setFollowersCount(0);
+      return undefined;
+    }
+
+    let unsubFollowing = () => {};
+    let unsubFollowers = () => {};
+
+    try {
+      // 1. Real-time count of people the current user follows
+      const followingQuery = query(
+        collection(db, 'follows'),
+        where('followerId', '==', userId)
+      );
+      unsubFollowing = onSnapshot(
+        followingQuery,
+        (snapshot) => {
+          setFollowingCount(snapshot.size);
+        },
+        (error) => {
+          console.warn('Real-time following count fallback:', error.message);
+        }
+      );
+
+      // 2. Real-time count of people following the current user
+      const followersQuery = query(
+        collection(db, 'follows'),
+        where('followingId', '==', userId)
+      );
+      unsubFollowers = onSnapshot(
+        followersQuery,
+        (snapshot) => {
+          setFollowersCount(snapshot.size);
+        },
+        (error) => {
+          console.warn('Real-time followers count fallback:', error.message);
+        }
+      );
+    } catch (err) {
+      console.warn('Firestore real-time listeners unavailable:', err.message);
+    }
+
+    return () => {
+      unsubFollowing();
+      unsubFollowers();
+    };
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>
+        Cargando inicio...
+      </div>
+    );
+  }
+
   if (!user) {
-    return <div style={{ padding: '20px' }}>Cargando inicio...</div>;
+    return <Navigate to="/login" replace />;
   }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Inicio</h1>
-
-      {/* Contadores de seguidores y seguidos */}
-      <div style={{ display: 'flex', gap: '20px', margin: '20px 0', padding: '15px', border: '1px solid #ccc', borderRadius: '10px' }}>
-        <div>
-          <Link to="/following" style={{ textDecoration: 'none', color: '#333' }}>
-            <strong>{user.followingCount || 85}</strong> Siguiendo
-          </Link>
-        </div>
-        <div>
-          <Link to="/followers" style={{ textDecoration: 'none', color: '#333' }}>
-            <strong>{user.followersCount || 150}</strong> Seguidores
-          </Link>
-        </div>
-      </div>
-
-      {/* Enlace Tweet */}
-      <div style={{ marginTop: '30px' }}>
-        <Link
-          to="/compose"
-          style={{ padding: '10px 20px', backgroundColor: '#1DA1F2', color: 'white', textDecoration: 'none', borderRadius: '20px', fontWeight: 'bold' }}
-        >
-          Tweet
+    <div>
+      {/* Real-time counters banner for Home dashboard */}
+      <div
+        className="home-profile-counts"
+        style={{
+          display: 'flex',
+          gap: '24px',
+          padding: '16px',
+          borderBottom: '1px solid var(--line)',
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+        }}
+      >
+        <Link to="/following" style={{ textDecoration: 'none' }}>
+          <strong>{followingCount}</strong> <span style={{ color: 'var(--muted)' }}>Siguiendo</span>
+        </Link>
+        <Link to="/followers" style={{ textDecoration: 'none' }}>
+          <strong>{followersCount}</strong> <span style={{ color: 'var(--muted)' }}>Seguidores</span>
         </Link>
       </div>
+
+      {/* Quick follow by @username form */}
+      <FollowSearchForm />
+
+      {/* Main timeline feed with tabs and pagination */}
+      <FeedPage />
     </div>
   );
 }
-=======
-import { Navigate } from "react-router-dom";
-import useAuth from "../hooks/useAuth";
-import FeedPage from "./FeedPage";
-export default function HomePage() { const { user } = useAuth(); return user ? <FeedPage/> : <Navigate to="/login" replace/>; }
->>>>>>> origin/feature/spa

@@ -1,168 +1,98 @@
-
-<<<<<<< HEAD
-import { useEffect, useMemo, useState } from 'react';
-import UserCard from '../components/common/UserCard';
-import Pagination from '../components/common/Pagination';
-import { getFollowing } from '../services/followService';
-import { useAuth } from '../hooks/useAuth';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import useAuth from '../hooks/useAuth';
 import usePagination from '../hooks/usePagination';
+import useToast from '../hooks/useToast';
+import UserCard from '../components/common/UserCard';
+import ChirpCard from '../components/common/ChirpCard';
+import EmptyState from '../components/common/EmptyState';
+import Spinner from '../components/common/Spinner';
+import Pagination from '../components/common/Pagination';
+import FollowSearchForm from '../components/common/FollowSearchForm';
+import Toast from '../components/common/Toast';
+import { getUserByUsername } from '../services/userService';
+import { getFollowingUsers, getFollowingIds } from '../services/followService';
+import { getTweetsByUsers } from '../services/tweetService';
 
-function FollowingPage() {
-  const { user } = useAuth();
-  const currentUserId = user?.uid;
-
-  const [following, setFollowing] = useState([]);
-
-  useEffect(() => {
-    if (!currentUserId) {
-      setFollowing([]);
-      return;
-    }
-
-    const loadFollowing = () => {
-      const users = getFollowing(currentUserId);
-      setFollowing(users);
-    };
-
-    loadFollowing();
-  }, [currentUserId]);
-
-  // Ordenar alfabéticamente por nombre completo
-  const sortedFollowing = useMemo(() => {
-    return [...following].sort((a, b) =>
-      (a.fullName || a.username || '').localeCompare(
-        b.fullName || b.username || '',
-        'es',
-        { sensitivity: 'base' }
-      )
-    );
-  }, [following]);
-
-  // Aplicar paginación: máximo 10 usuarios
-  const {
-    currentPage,
-    totalPages,
-    paginatedItems,
-    nextPage,
-    previousPage,
-    goToPage,
-  } = usePagination(sortedFollowing, 10);
-
-  return (
-    <section>
-      <h2>Usuarios que sigo</h2>
-
-      <p>Total de seguidos: {following.length}</p>
-
-      {following.length === 0 ? (
-        <p>Todavía no sigues a ningún usuario.</p>
-      ) : (
-        <>
-          {paginatedItems.map((followedUser) => (
-            <UserCard
-              key={followedUser.uid}
-              user={followedUser}
-            />
-          ))}
-
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            nextPage={nextPage}
-            previousPage={previousPage}
-            goToPage={goToPage}
-          />
-        </>
-=======
-import { useCallback, useEffect, useState } from "react";
-import useAuth from "../hooks/useAuth";
-import UserCard from "../components/common/UserCard";
-import ChirpCard from "../components/common/ChirpCard";
-import EmptyState from "../components/common/EmptyState";
-import Spinner from "../components/common/Spinner";
-
-import {
-  followByUsername,
-  getFollowingUsers,
-} from "../services/followService";
-
-import {
-  getTweetsByUsers,
-} from "../services/tweetService";
-
+// Following page supporting both authenticated user (/following) and third-party profiles (/users/:username/following)
 export default function FollowingPage() {
-  const { user } = useAuth();
+  const { username } = useParams();
+  const { user: currentUser } = useAuth();
+  const { toast, showToast, clearToast } = useToast();
 
-  const [followingIds, setFollowingIds] = useState([]);
+  const [targetUser, setTargetUser] = useState(null);
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
-  const [target, setTarget] = useState("");
-  const [message, setMessage] = useState("");
-
+  const [myFollowingIds, setMyFollowingIds] = useState([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const [showListTweets, setShowListTweets] = useState(false);
   const [listTweets, setListTweets] = useState([]);
   const [tweetsLoading, setTweetsLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!user?.id) {
-      setUsers([]);
-      setFollowingIds([]);
-      setLoading(false);
-      return;
-    }
+  const currentUserId = currentUser?.id || currentUser?.uid;
 
+  const loadData = useCallback(async () => {
     setLoading(true);
+    setError('');
 
     try {
-      const followedUsers = await getFollowingUsers(user.id);
+      let resolvedTarget = null;
+      let targetId = null;
 
-      const ids = followedUsers.map((item) => item.id);
+      if (username) {
+        resolvedTarget = await getUserByUsername(username);
+        if (!resolvedTarget) {
+          setError(`No encontramos al usuario @${username}`);
+          setLoading(false);
+          return;
+        }
+        targetId = resolvedTarget.id || resolvedTarget.uid;
+        setTargetUser(resolvedTarget);
+      } else {
+        if (!currentUserId) {
+          setLoading(false);
+          return;
+        }
+        targetId = currentUserId;
+        setTargetUser(currentUser);
+      }
 
-      setFollowingIds(ids);
-      setUsers(followedUsers);
+      const [following, myFollowing] = await Promise.all([
+        getFollowingUsers(targetId),
+        currentUserId ? getFollowingIds(currentUserId) : Promise.resolve([]),
+      ]);
+
+      setUsers(following || []);
+      setMyFollowingIds(myFollowing || []);
     } catch (err) {
-      console.error("Error cargando seguidos:", err);
-
-      setMessage(
-        err.message || "No se pudo cargar la lista de seguidos."
-      );
+      console.error('Error cargando seguidos:', err);
+      setError(err?.message || 'No se pudo cargar la lista de seguidos.');
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [username, currentUserId, currentUser]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadData();
+  }, [loadData]);
 
-  const submit = async (event) => {
-    event.preventDefault();
-
-    setMessage("");
-    setBusy(true);
-
+  // Refresh current user's follow state after button toggle
+  const handleFollowChange = async () => {
+    if (!currentUserId) return;
     try {
+      const updated = await getFollowingIds(currentUserId);
+      setMyFollowingIds(updated || []);
+      showToast('Relación de seguimiento actualizada con éxito', 'success');
 
-      const followed = await followByUsername(user, target);
-
-      setTarget("");
-
-      setMessage(
-        `Ahora sigues a @${followed.username}.`
-      );
-
-      await load();
+      // If viewing own following list, refresh the whole list so unfollowed user is removed
+      if (!username || (targetUser && (targetUser.id || targetUser.uid) === currentUserId)) {
+        const followedUsers = await getFollowingUsers(currentUserId);
+        setUsers(followedUsers || []);
+      }
     } catch (err) {
-      console.error("Error siguiendo usuario:", err);
-
-      setMessage(
-        err.message || "No se pudo seguir a ese usuario."
-      );
-    } finally {
-      setBusy(false);
+      console.warn('Error refrescando lista de seguidos:', err);
     }
   };
 
@@ -175,146 +105,167 @@ export default function FollowingPage() {
     setTweetsLoading(true);
 
     try {
-      const tweets = await getTweetsByUsers(
-        users.map((item) => item.id)
-      );
-
-      setListTweets(tweets);
+      const tweets = await getTweetsByUsers(users.map((item) => item.id || item.uid));
+      setListTweets(tweets || []);
       setShowListTweets(true);
     } catch (err) {
-      console.error("Error cargando publicaciones:", err);
-
-      setMessage(
-        err.message || "No se pudieron cargar las publicaciones."
-      );
+      console.error('Error cargando publicaciones:', err);
+      showToast(err?.message || 'No se pudieron cargar las publicaciones.', 'error');
     } finally {
       setTweetsLoading(false);
     }
   };
 
-  const filteredUsers = users.filter((item) =>
-    `${item.name || ""} ${item.username || ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
+  // Filter users by search term
+  const filteredUsers = useMemo(() => {
+    return users.filter((item) =>
+      `${item.fullName || item.name || ''} ${item.username || ''}`
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    );
+  }, [users, search]);
+
+  // Sort followed users alphabetically by full name (Milestone 1 & 3 requirement)
+  const sortedFollowing = useMemo(() => {
+    return [...filteredUsers].sort((a, b) =>
+      (a.fullName || a.name || a.username || '').localeCompare(
+        b.fullName || b.name || b.username || '',
+        'es',
+        { sensitivity: 'base' }
+      )
+    );
+  }, [filteredUsers]);
+
+  // Pagination with strict limit of 10 items per page
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+  } = usePagination(sortedFollowing, 10);
+
+  const isThirdParty = Boolean(username && targetUser && (targetUser.id || targetUser.uid) !== currentUserId);
 
   return (
     <section>
-      <header className="page-header">
-        <h1>Seguidos</h1>
+      <header
+        className="page-header"
+        style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 16px' }}
+      >
+        {isThirdParty && (
+          <Link
+            to={`/users/${encodeURIComponent(username)}`}
+            style={{ color: 'var(--text)', fontSize: '20px', textDecoration: 'none' }}
+            aria-label="Volver al perfil"
+          >
+            ←
+          </Link>
+        )}
+        <div>
+          <h1 style={{ margin: 0, fontSize: '20px' }}>
+            {isThirdParty
+              ? `Personas que sigue @${targetUser.username}`
+              : 'Seguidos'}
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>
+            {users.length} {users.length === 1 ? 'seguido' : 'seguidos'}
+          </p>
+        </div>
       </header>
 
-      <form
-        className="follow-search"
-        onSubmit={submit}
-      >
-        <label htmlFor="follow-username">
-          Seguir por nombre de usuario
-        </label>
+      {/* Visual form to follow by @username with instant validation (on own profile /following) */}
+      {!isThirdParty && (
+        <FollowSearchForm
+          onFollowSuccess={() => {
+            loadData();
+            showToast('¡Usuario seguido con éxito!', 'success');
+          }}
+        />
+      )}
 
-        <div>
-          <input
-            id="follow-username"
-            value={target}
-            onChange={(event) =>
-              setTarget(event.target.value)
-            }
-            placeholder="@nombredeusuario"
-            required
-          />
-
-          <button
-            className="button"
-            disabled={busy || !user}
-            type="submit"
-          >
-            {busy ? "Buscando..." : "Seguir"}
-          </button>
-        </div>
-
-        {message && (
-          <p
-            className={
-              message.startsWith("Ahora")
-                ? "success-message"
-                : "form-error"
-            }
-            role="status"
-          >
-            {message}
-          </p>
-        )}
-      </form>
-
-      <div className="list-tweets-action">
+      {/* Button to view tweets from followed users in this list */}
+      <div className="list-tweets-action" style={{ padding: '12px 16px' }}>
         <button
           type="button"
           className="button button--outline"
           onClick={toggleListTweets}
-          disabled={
-            tweetsLoading ||
-            loading ||
-            users.length === 0
-          }
+          disabled={tweetsLoading || loading || users.length === 0}
         >
           {tweetsLoading
-            ? "Cargando publicaciones..."
+            ? 'Cargando publicaciones...'
             : showListTweets
-              ? "Ocultar publicaciones"
-              : "Ver publicaciones de tus seguidos"}
+            ? 'Ocultar publicaciones'
+            : isThirdParty
+            ? `Ver publicaciones de las personas que sigue @${username}`
+            : 'Ver publicaciones de tus seguidos'}
         </button>
       </div>
 
       {showListTweets && (
-        listTweets.length > 0 ? (
-          listTweets.map((chirp) => (
-            <ChirpCard
-              key={chirp.id}
-              chirp={chirp}
+        <div style={{ borderBottom: '1px solid var(--line)' }}>
+          {listTweets.length > 0 ? (
+            listTweets.map((chirp) => <ChirpCard key={chirp.id} chirp={chirp} />)
+          ) : (
+            <EmptyState
+              title="Sin publicaciones"
+              description="Las personas de esta lista todavía no tienen publicaciones."
             />
-          ))
-        ) : (
-          <EmptyState
-            title="Sin publicaciones"
-            description="Las personas de esta lista todavía no tienen publicaciones."
-          />
-        )
+          )}
+        </div>
       )}
 
-      <div className="search-box">
+      {/* Search box to filter users */}
+      <div className="search-box" style={{ padding: '12px 16px' }}>
         <input
           value={search}
-          onChange={(event) =>
-            setSearch(event.target.value)
-          }
-          placeholder="Buscar entre los usuarios que sigues"
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={isThirdParty ? `Buscar entre las personas que sigue @${username}` : 'Buscar entre los usuarios que sigues'}
         />
       </div>
 
       {loading ? (
         <Spinner />
-      ) : filteredUsers.length > 0 ? (
-        filteredUsers.map((item) => (
-          <UserCard
-            key={item.id}
-            user={item}
-            currentUser={user}
-            followingIds={followingIds}
-            onFollowChange={load}
+      ) : error ? (
+        <p className="form-error" role="alert" style={{ padding: '16px' }}>
+          {error}
+        </p>
+      ) : paginatedItems.length > 0 ? (
+        <>
+          <div>
+            {paginatedItems.map((item) => (
+              <UserCard
+                key={item.id || item.uid}
+                user={item}
+                currentUser={currentUser}
+                followingIds={myFollowingIds}
+                onFollowChange={handleFollowChange}
+              />
+            ))}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            nextPage={nextPage}
+            previousPage={previousPage}
+            goToPage={goToPage}
           />
-        ))
+        </>
       ) : (
         <EmptyState
-          title="Aún no sigues a nadie"
-          description="Busca un nombre de usuario arriba para comenzar."
+          title={isThirdParty ? `@${username} aún no sigue a nadie` : 'Aún no sigues a nadie'}
+          description={
+            isThirdParty
+              ? 'Cuando este usuario siga a otras cuentas, aparecerán listadas aquí.'
+              : 'Busca un nombre de usuario arriba para comenzar a seguir.'
+          }
         />
->>>>>>> origin/feature/spa
       )}
+
+      <Toast toast={toast} onClose={clearToast} />
     </section>
   );
 }
-<<<<<<< HEAD
 
-export default FollowingPage;
-=======
->>>>>>> origin/feature/spa
