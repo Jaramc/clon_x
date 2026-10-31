@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -40,3 +41,9 @@ export default function HomePage() {
     </div>
   );
 }
+=======
+import { Navigate } from "react-router-dom";
+import useAuth from "../hooks/useAuth";
+import FeedPage from "./FeedPage";
+export default function HomePage() { const { user } = useAuth(); return user ? <FeedPage/> : <Navigate to="/login" replace/>; }
+>>>>>>> origin/feature/spa

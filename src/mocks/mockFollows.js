@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 export const mockFollows = [
   {
@@ -17,3 +18,6 @@ export const mockFollows = [
     followingId: 'user-102',
   },
 ];
+=======
+export const mockFollows = [];
+>>>>>>> origin/feature/spa
