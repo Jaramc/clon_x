@@ -1,44 +1,90 @@
-<<<<<<< HEAD
-
 import { useEffect, useMemo, useState } from 'react';
-import UserCard from '../components/common/UserCard';
-import Pagination from '../components/common/Pagination';
-import { getFollowers } from '../services/followService';
-import { useAuth } from '../hooks/useAuth';
+import useAuth from '../hooks/useAuth';
 import usePagination from '../hooks/usePagination';
+import UserCard from '../components/common/UserCard';
+import ChirpCard from '../components/common/ChirpCard';
+import EmptyState from '../components/common/EmptyState';
+import Spinner from '../components/common/Spinner';
+import Pagination from '../components/common/Pagination';
+import { getFollowerUsers, getFollowingIds } from '../services/followService';
+import { getTweetsByUsers } from '../services/tweetService';
 
-function FollowersPage() {
+// Followers page with Firestore data, search filter, alphabetical sort, and pagination
+export default function FollowersPage() {
   const { user } = useAuth();
-  const currentUserId = user?.uid;
+  const [users, setUsers] = useState([]);
+  const [followingIds, setFollowingIds] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showListTweets, setShowListTweets] = useState(false);
+  const [listTweets, setListTweets] = useState([]);
+  const [tweetsLoading, setTweetsLoading] = useState(false);
 
-  const [followers, setFollowers] = useState([]);
+  const userId = user?.id || user?.uid;
+
+  const loadData = async () => {
+    if (!userId) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const [followers, following] = await Promise.all([
+        getFollowerUsers(userId),
+        getFollowingIds(userId),
+      ]);
+      setUsers(followers || []);
+      setFollowingIds(following || []);
+    } catch (err) {
+      setError(err?.message || 'No se pudieron cargar los seguidores.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!currentUserId) {
-      setFollowers([]);
+    loadData();
+  }, [userId]);
+
+  const toggleListTweets = async () => {
+    if (showListTweets) {
+      setShowListTweets(false);
       return;
     }
 
-    const loadFollowers = () => {
-      const users = getFollowers(currentUserId);
-      setFollowers(users);
-    };
+    setTweetsLoading(true);
+    try {
+      const tweets = await getTweetsByUsers(users.map((item) => item.id || item.uid));
+      setListTweets(tweets || []);
+      setShowListTweets(true);
+    } catch (err) {
+      setError(err?.message || 'No se pudieron cargar las publicaciones.');
+    } finally {
+      setTweetsLoading(false);
+    }
+  };
 
-    loadFollowers();
-  }, [currentUserId]);
+  // Filter by search query
+  const filteredUsers = useMemo(() => {
+    return users.filter((item) =>
+      `${item.name || item.fullName || ''} ${item.username || ''}`
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    );
+  }, [users, search]);
 
-  // Ordenar seguidores alfabéticamente
+  // Sort followers alphabetically (Milestone 1 requirement)
   const sortedFollowers = useMemo(() => {
-    return [...followers].sort((a, b) =>
-      (a.fullName || a.username || '').localeCompare(
-        b.fullName || b.username || '',
+    return [...filteredUsers].sort((a, b) =>
+      (a.name || a.fullName || a.username || '').localeCompare(
+        b.name || b.fullName || b.username || '',
         'es',
         { sensitivity: 'base' }
       )
     );
-  }, [followers]);
+  }, [filteredUsers]);
 
-  // Aplicar paginación de máximo 10 usuarios
+  // Pagination of max 10 users (Milestone 1 requirement)
   const {
     currentPage,
     totalPages,
@@ -50,20 +96,68 @@ function FollowersPage() {
 
   return (
     <section>
-      <h2>Usuarios que me siguen</h2>
+      <header className="page-header" style={{ padding: '12px 16px' }}>
+        <h1 style={{ margin: 0, fontSize: '20px' }}>Seguidores</h1>
+        <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>
+          Total de seguidores: {users.length}
+        </p>
+      </header>
 
-      <p>Total de seguidores: {followers.length}</p>
+      <div className="list-tweets-action" style={{ padding: '12px 16px' }}>
+        <button
+          type="button"
+          className="button button--outline"
+          onClick={toggleListTweets}
+          disabled={tweetsLoading || loading || users.length === 0}
+        >
+          {tweetsLoading
+            ? 'Cargando publicaciones...'
+            : showListTweets
+            ? 'Ocultar publicaciones'
+            : 'Ver publicaciones de tus seguidores'}
+        </button>
+      </div>
 
-      {followers.length === 0 ? (
-        <p>Todavía no tienes seguidores.</p>
-      ) : (
-        <>
-          {paginatedItems.map((follower) => (
-            <UserCard
-              key={follower.uid}
-              user={follower}
+      {showListTweets && (
+        <div style={{ borderBottom: '1px solid var(--line)' }}>
+          {listTweets.length ? (
+            listTweets.map((chirp) => <ChirpCard key={chirp.id} chirp={chirp} />)
+          ) : (
+            <EmptyState
+              title="Sin publicaciones"
+              description="Las personas de esta lista todavía no tienen publicaciones."
             />
-          ))}
+          )}
+        </div>
+      )}
+
+      <div className="search-box" style={{ padding: '12px 16px' }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar entre tus seguidores"
+        />
+      </div>
+
+      {loading ? (
+        <Spinner />
+      ) : error ? (
+        <p className="form-error" role="alert" style={{ padding: '16px' }}>
+          {error}
+        </p>
+      ) : paginatedItems.length ? (
+        <>
+          <div>
+            {paginatedItems.map((follower) => (
+              <UserCard
+                key={follower.id || follower.uid}
+                user={follower}
+                currentUser={user}
+                followingIds={followingIds}
+                onFollowChange={loadData}
+              />
+            ))}
+          </div>
 
           <Pagination
             currentPage={currentPage}
@@ -73,94 +167,12 @@ function FollowersPage() {
             goToPage={goToPage}
           />
         </>
+      ) : (
+        <EmptyState
+          title="Todavía no tienes seguidores"
+          description="Cuando otras personas te sigan, aparecerán aquí."
+        />
       )}
     </section>
   );
 }
-
-export default FollowersPage;
-=======
-import { useEffect, useState } from "react";
-import useAuth from "../hooks/useAuth";
-import UserCard from "../components/common/UserCard";
-import ChirpCard from "../components/common/ChirpCard";
-import EmptyState from "../components/common/EmptyState";
-import Spinner from "../components/common/Spinner";
-import { getFollowerUsers, getFollowingIds } from "../services/followService";
-import { getTweetsByUsers } from "../services/tweetService";
-
-export default function FollowersPage() {
-  const { user } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [followingIds, setFollowingIds] = useState([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [showListTweets, setShowListTweets] = useState(false);
-  const [listTweets, setListTweets] = useState([]);
-  const [tweetsLoading, setTweetsLoading] = useState(false);
-
-  const load = async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    setError("");
-    try {
-      const [followers, following] = await Promise.all([
-        getFollowerUsers(user.id),
-        getFollowingIds(user.id),
-      ]);
-      setUsers(followers);
-      setFollowingIds(following);
-    } catch (err) {
-      setError(err.message || "No se pudieron cargar los seguidores.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [user?.id]);
-
-  const toggleListTweets = async () => {
-    if (showListTweets) {
-      setShowListTweets(false);
-      return;
-    }
-
-    setTweetsLoading(true);
-    try {
-      const tweets = await getTweetsByUsers(users.map((item) => item.id));
-      setListTweets(tweets);
-      setShowListTweets(true);
-    } catch (err) {
-      setError(err.message || "No se pudieron cargar las publicaciones.");
-    } finally {
-      setTweetsLoading(false);
-    }
-  };
-
-  const filteredUsers = users.filter((item) =>
-    `${item.name} ${item.username}`.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <section>
-      <header className="page-header"><h1>Seguidores</h1></header>
-      <div className="list-tweets-action">
-        <button type="button" className="button button--outline" onClick={toggleListTweets} disabled={tweetsLoading || loading || users.length === 0}>
-          {tweetsLoading ? "Cargando publicaciones..." : showListTweets ? "Ocultar publicaciones" : "Ver publicaciones de tus seguidores"}
-        </button>
-      </div>
-      {showListTweets && (listTweets.length ? listTweets.map((chirp) => <ChirpCard key={chirp.id} chirp={chirp} />) : <EmptyState title="Sin publicaciones" description="Las personas de esta lista todavía no tienen publicaciones." />)}
-      <div className="search-box">
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar entre tus seguidores" />
-      </div>
-      {loading ? <Spinner /> :
-        error ? <p className="form-error" role="alert">{error}</p> :
-        filteredUsers.length ? filteredUsers.map((item) =>
-          <UserCard key={item.id} user={item} currentUser={user} followingIds={followingIds} onFollowChange={load} />
-        ) :
-        <EmptyState title="Todavía no tienes seguidores" description="Cuando otras personas te sigan, aparecerán aquí." />}
-    </section>
-  );
-}
->>>>>>> origin/feature/spa

@@ -1,128 +1,69 @@
-
-<<<<<<< HEAD
 import { useState } from 'react';
-import './FollowButton.css';
+import { followByUsername, unfollowUser } from '../../services/followService';
 
-function FollowButton({
-  isFollowing = false,
-  onToggle,
-  disabled = false,
-}) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleClick = async () => {
-    if (loading || disabled || typeof onToggle !== 'function') {
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      await onToggle();
-    } catch (err) {
-      setError(err?.message || 'No se pudo actualizar el seguimiento');
-    } finally {
-      setLoading(false);
-=======
-import { useState } from "react";
-
-import {
-  followByUsername,
-  unfollowUser,
-} from "../../services/followService";
-
+// Reusable follow toggle button supporting both manual toggle callback and direct user entity
 export default function FollowButton({
   user,
   currentUser,
   following,
+  isFollowing,
   onChange,
+  onToggle,
+  disabled = false,
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
-  const handleFollow = async () => {
-    if (busy) return;
+  const activeFollowing = following !== undefined ? following : isFollowing;
+
+  const handleAction = async () => {
+    if (busy || disabled) return;
 
     setBusy(true);
-    setError("");
+    setError('');
 
     try {
-      if (following) {
-        await unfollowUser(currentUser, user.id);
-      } else {
-        await followByUsername(
-          currentUser,
-          user.username
-        );
-      }
+      if (typeof onToggle === 'function') {
+        await onToggle();
+      } else if (user) {
+        const targetId = user.id || user.uid;
+        const targetUsername = user.username;
 
-      if (onChange) {
-        await onChange();
+        if (activeFollowing) {
+          await unfollowUser(currentUser, targetId);
+        } else {
+          await followByUsername(currentUser, targetUsername);
+        }
+
+        if (typeof onChange === 'function') {
+          await onChange();
+        }
       }
     } catch (err) {
-      console.error("Error al actualizar seguimiento:", {
-        code: err.code,
-        message: err.message,
-      });
-
-      setError(
-        err.message || "No se pudo actualizar el seguimiento."
-      );
+      console.error('Error al actualizar seguimiento:', err);
+      setError(err?.message || 'No se pudo actualizar el seguimiento.');
     } finally {
       setBusy(false);
->>>>>>> origin/feature/spa
     }
   };
 
   return (
-<<<<<<< HEAD
-    <div className="follow-control">
+    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
       <button
         type="button"
-        className={`follow-button ${isFollowing ? 'following' : ''}`}
-        onClick={handleClick}
-        disabled={loading || disabled || !onToggle}
-        aria-pressed={isFollowing}
+        className={activeFollowing ? 'button button--outline' : 'button'}
+        onClick={handleAction}
+        disabled={busy || disabled}
+        aria-pressed={activeFollowing}
       >
-        {loading ? 'Procesando...' : isFollowing ? 'Siguiendo' : 'Seguir'}
+        {busy ? 'Procesando...' : activeFollowing ? 'Siguiendo' : 'Seguir'}
       </button>
 
       {error && (
-        <span className="follow-error" role="alert">
+        <span className="form-error" role="alert" style={{ fontSize: '12px' }}>
           {error}
         </span>
-=======
-    <div>
-      <button
-        className={
-          following
-            ? "button button--outline"
-            : "button"
-        }
-        onClick={handleFollow}
-        disabled={busy}
-        type="button"
-      >
-        {busy
-          ? "Procesando..."
-          : following
-            ? "Siguiendo"
-            : "Seguir"}
-      </button>
-
-      {error && (
-        <small className="form-error" role="alert">
-          {error}
-        </small>
->>>>>>> origin/feature/spa
       )}
     </div>
   );
 }
-<<<<<<< HEAD
-
-export default FollowButton;
-=======
->>>>>>> origin/feature/spa

@@ -1,25 +1,19 @@
 {
-<<<<<<< HEAD
-=======
   "name": "clon_x",
   "version": "1.0.0",
   "private": true,
->>>>>>> origin/feature/spa
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
-<<<<<<< HEAD
-=======
   "dependencies": {
     "firebase": "^13.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"
   },
->>>>>>> origin/feature/spa
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.2",
     "eslint": "^8.57.1",
@@ -31,15 +25,6 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
     "prettier": "^3.9.10",
-<<<<<<< HEAD
     "vite": "^8.3.5"
-  },
-  "dependencies": {
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.5"
-=======
-    "vite": "latest"
->>>>>>> origin/feature/spa
   }
 }

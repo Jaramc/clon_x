@@ -1,38 +1,23 @@
-<<<<<<< HEAD
+import { useMemo, useState } from 'react';
 
-import { useState } from "react";
-
+// Hook for client-side pagination supporting both API conventions
 export default function usePagination(items = [], itemsPerPage = 10) {
   const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = itemsPerPage;
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(items.length / itemsPerPage)
-  );
-
+  const totalPages = Math.max(1, Math.ceil((items || []).length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
 
-  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
-
-  const paginatedItems = items.slice(
-    startIndex,
-    startIndex + itemsPerPage
+  const paginatedItems = useMemo(
+    () => (items || []).slice(startIndex, startIndex + pageSize),
+    [items, startIndex, pageSize]
   );
 
-  const nextPage = () => {
-    setCurrentPage((prev) =>
-      Math.min(prev + 1, totalPages)
-    );
-  };
-
-  const previousPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 1));
-  };
-
+  const nextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  const previousPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
   const goToPage = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
   return {
@@ -42,15 +27,12 @@ export default function usePagination(items = [], itemsPerPage = 10) {
     nextPage,
     previousPage,
     goToPage,
+    // Alias keys for compatibility with feature/spa
+    data: paginatedItems,
+    page: safeCurrentPage,
+    pages: totalPages,
+    setPage: setCurrentPage,
+    hasPrevious: safeCurrentPage > 1,
+    hasNext: safeCurrentPage < totalPages,
   };
 }
-=======
-import { useMemo, useState } from "react";
-export default function usePagination(items, pageSize = 10) {
-  const [page, setPage] = useState(1);
-  const pages = Math.max(1, Math.ceil(items.length / pageSize));
-  const currentPage = Math.min(page, pages);
-  const data = useMemo(() => items.slice((currentPage - 1) * pageSize, currentPage * pageSize), [items, currentPage, pageSize]);
-  return { data, page: currentPage, pages, setPage, hasPrevious: currentPage > 1, hasNext: currentPage < pages };
-}
->>>>>>> origin/feature/spa
