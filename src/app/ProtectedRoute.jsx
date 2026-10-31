@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { Navigate, Outlet } from 'react-router-dom';
 
 // Basic protected route component for beginner level
@@ -15,3 +16,8 @@ function ProtectedRoute({ children }) {
 }
 
 export default ProtectedRoute;
+=======
+import { Navigate, Outlet } from "react-router-dom";
+import useAuth from "../hooks/useAuth";
+export default function ProtectedRoute() { const { user } = useAuth(); return user ? <Outlet/> : <Navigate to="/login" replace/>; }
+>>>>>>> origin/feature/spa
