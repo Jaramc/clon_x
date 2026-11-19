@@ -55,7 +55,7 @@ export default function RegisterPage() {
             value={form.name}
             onChange={update}
             placeholder="Tu nombre completo"
-            maxLength={60}
+            maxLength={50}
             required
           />
         </label>

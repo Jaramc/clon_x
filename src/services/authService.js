@@ -170,7 +170,7 @@ export async function loginWithGoogle() {
     return await createUserProfile(firebaseUser.uid, {
       username,
       email,
-      name: firebaseUser.displayName || username,
+      name: (firebaseUser.displayName || username).trim().slice(0, 50),
     });
   } catch (error) {
     // Do not leave a signed-in session without a Firestore profile
