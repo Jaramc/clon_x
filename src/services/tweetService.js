@@ -91,10 +91,8 @@ export async function createTweet(user, text, imageUrl = null) {
     localTweets = [saved, ...localTweets];
     return saved;
   } catch (error) {
-    console.warn('Saving tweet locally in memory:', error.message);
-    const localSaved = { id: `tweet-${Date.now()}`, ...chirp };
-    localTweets = [localSaved, ...localTweets];
-    return localSaved;
+    console.error('Failed to save tweet:', error);
+    throw new Error('No se pudo guardar la publicación. Inténtalo de nuevo.');
   }
 }
 

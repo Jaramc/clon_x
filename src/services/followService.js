@@ -10,7 +10,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { getUserByUsername, getUsers } from './userService';
+import { getUserById, getUserByUsername, getUsers } from './userService';
 import { mockFollows } from '../mocks/mockFollows';
 import { mockUsers } from '../mocks/mockUsers';
 
@@ -263,7 +263,8 @@ export async function followUser(currentUserOrFollowerId, targetUserOrFollowingI
       createdAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.warn('Falling back to local follow:', error.message);
+    console.error('Failed to follow user:', error);
+    throw new Error('No se pudo seguir al usuario. Inténtalo de nuevo.');
   }
 
   const exists = localFollows.some(
@@ -302,7 +303,8 @@ export async function unfollowUser(currentUserOrFollowerId, targetUserOrFollowin
     const followRef = doc(db, FOLLOWS_COLLECTION, followId);
     await deleteDoc(followRef);
   } catch (error) {
-    console.warn('Falling back to local unfollow:', error.message);
+    console.error('Failed to unfollow user:', error);
+    throw new Error('No se pudo dejar de seguir al usuario. Inténtalo de nuevo.');
   }
 
   localFollows = localFollows.filter(
