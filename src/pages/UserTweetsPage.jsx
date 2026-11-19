@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { getUserByUsername } from '../services/userService';
 import { getTweetsByUser } from '../services/tweetService';
 import {
   subscribeToFollowCounts,
   subscribeToFollowStatus,
-  followUser,
-  unfollowUser,
   getFollowCounts,
   isFollowing,
 } from '../services/followService';
@@ -20,7 +20,6 @@ import Spinner from '../components/common/Spinner';
 import Pagination from '../components/common/Pagination';
 import Toast from '../components/common/Toast';
 
-// Unified page to display any user's profile and tweets with real-time follow counters and pagination
 export default function UserTweetsPage() {
   const { username } = useParams();
   const { user: currentUser } = useAuth();
@@ -36,7 +35,7 @@ export default function UserTweetsPage() {
 
   const currentId = currentUser?.id || currentUser?.uid;
 
-  // 1. Load user profile and tweets
+  // Resolve target profile (current user or target username)
   useEffect(() => {
     let active = true;
 
@@ -45,22 +44,35 @@ export default function UserTweetsPage() {
       setError('');
 
       try {
-        const profile = await getUserByUsername(username);
+        let profile = null;
+
+        // Fallback directly to logged-in user if on own profile or route /profile
+        const isOwnUsername =
+          currentUser &&
+          (!username ||
+            username === 'profile' ||
+            username === currentUser.username ||
+            username === currentId);
+
+        if (isOwnUsername) {
+          profile = currentUser;
+        } else if (username) {
+          profile = await getUserByUsername(username);
+        }
+
         if (!profile) {
           if (active) setTarget(null);
           return;
         }
 
         const targetId = profile.id || profile.uid;
-        const [profileChirps, initialCounts, initialFollowStatus] = await Promise.all([
-          getTweetsByUser(targetId),
+        const [initialCounts, initialFollowStatus] = await Promise.all([
           getFollowCounts(targetId),
           currentId && currentId !== targetId ? isFollowing(currentId, targetId) : false,
         ]);
 
         if (active) {
           setTarget(profile);
-          setChirps(profileChirps || []);
           setFollowersCount(initialCounts.followersCount || 0);
           setFollowingCount(initialCounts.followingCount || 0);
           setIsFollowingUser(Boolean(initialFollowStatus));
@@ -76,20 +88,71 @@ export default function UserTweetsPage() {
     return () => {
       active = false;
     };
-  }, [username, currentId]);
+  }, [username, currentId, currentUser]);
 
-  // 2. Real-time subscriptions for follower/following counts and relationship status
+  // Query chirps_v2 filtered by target userId with real-time snapshot
+  useEffect(() => {
+    const targetId = target?.id || target?.uid;
+    if (!targetId) {
+      setChirps([]);
+      return undefined;
+    }
+
+    let active = true;
+    let unsubscribeChirps = () => {};
+
+    try {
+      const chirpsQuery = query(
+        collection(db, 'chirps_v2'),
+        where('userId', '==', targetId)
+      );
+
+      unsubscribeChirps = onSnapshot(
+        chirpsQuery,
+        (snapshot) => {
+          if (!active) return;
+          const items = snapshot.docs
+            .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+          if (items.length > 0) {
+            setChirps(items);
+          } else {
+            // Fallback for mock tweets if firestore has no documents
+            getTweetsByUser(targetId).then((fallback) => {
+              if (active) setChirps(fallback || []);
+            });
+          }
+        },
+        async (err) => {
+          console.warn('Real-time tweets listener error, using fallback:', err.message);
+          const fallback = await getTweetsByUser(targetId);
+          if (active) setChirps(fallback || []);
+        }
+      );
+    } catch (err) {
+      console.warn('Error creating chirps query:', err.message);
+      getTweetsByUser(targetId).then((fallback) => {
+        if (active) setChirps(fallback || []);
+      });
+    }
+
+    return () => {
+      active = false;
+      unsubscribeChirps();
+    };
+  }, [target?.id, target?.uid]);
+
+  // Real-time subscriptions for follower/following counts and relationship status
   useEffect(() => {
     const targetId = target?.id || target?.uid;
     if (!targetId) return undefined;
 
-    // Real-time counter subscription
     const unsubCounts = subscribeToFollowCounts(targetId, ({ followingCount: fCount, followersCount: folCount }) => {
       setFollowingCount(fCount);
       setFollowersCount(folCount);
     });
 
-    // Real-time relationship status subscription (is current user following target)
     let unsubStatus = () => {};
     if (currentId && currentId !== targetId) {
       unsubStatus = subscribeToFollowStatus(currentId, targetId, (status) => {
@@ -233,8 +296,12 @@ export default function UserTweetsPage() {
         </>
       ) : (
         <EmptyState
-          title="Todavía no hay publicaciones"
-          description="Cuando publique, sus tweets aparecerán aquí."
+          title={isMe ? 'Aún no has publicado nada' : 'Todavía no hay publicaciones'}
+          description={
+            isMe
+              ? 'Comparte tus pensamientos publicando tu primer tweet.'
+              : 'Cuando publique, sus tweets aparecerán aquí.'
+          }
         />
       )}
 
