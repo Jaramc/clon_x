@@ -3,7 +3,6 @@ import ProtectedRoute from './ProtectedRoute';
 import MainLayout from '../components/layout/MainLayout';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
-import HomePage from '../pages/HomePage';
 import FeedPage from '../pages/FeedPage';
 import ComposePage from '../pages/ComposePage';
 import FollowersPage from '../pages/FollowersPage';
@@ -35,10 +34,6 @@ const router = createBrowserRouter([
       {
         path: 'feed',
         element: <FeedPage />,
-      },
-      {
-        path: 'home',
-        element: <HomePage />,
       },
       {
         path: 'compose',
