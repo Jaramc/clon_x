@@ -23,7 +23,6 @@ export default function FeedPage() {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [followedIds, setFollowedIds] = useState([]);
-  const [followerIds, setFollowerIds] = useState([]);
 
   const userId = user?.id || user?.uid;
 
@@ -76,7 +75,6 @@ export default function FeedPage() {
   useEffect(() => {
     if (!userId) {
       setFollowedIds([]);
-      setFollowerIds([]);
       setFollowingCount(0);
       setFollowersCount(0);
       return undefined;
@@ -107,13 +105,11 @@ export default function FeedPage() {
         followersQuery,
         (snapshot) => {
           const ids = snapshot.docs.map((d) => d.data().followerId).filter(Boolean);
-          setFollowerIds(ids);
           setFollowersCount(ids.length);
         },
         async () => {
           // Fallback async fetch
           const ids = await getFollowerIds(userId).catch(() => []);
-          setFollowerIds(ids);
           setFollowersCount(ids.length);
         }
       );
@@ -127,14 +123,14 @@ export default function FeedPage() {
     };
   }, [userId]);
 
-  // 3. Milestone 2 requirement: Combine own tweets + followed + followers in chronological order
+  // 3. Feed: own tweets + tweets from followed users, newest first
   const filteredTweets = useMemo(() => {
     if (!userId) {
       return rawTweets;
     }
 
-    // Set of allowed authors: myself + people I follow + people who follow me
-    const forYouAllowed = new Set([userId, ...followedIds, ...followerIds]);
+    // Allowed authors: myself + people I follow
+    const forYouAllowed = new Set([userId, ...followedIds]);
     const followingAllowed = new Set(followedIds);
 
     const targetSet = activeTab === 'following' ? followingAllowed : forYouAllowed;
@@ -142,7 +138,7 @@ export default function FeedPage() {
     return rawTweets
       .filter((tweet) => targetSet.has(tweet.userId || tweet.uid))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [rawTweets, userId, followedIds, followerIds, activeTab]);
+  }, [rawTweets, userId, followedIds, activeTab]);
 
   // 4. Milestone 1 requirement: pagination with max 10 items
   const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
@@ -212,7 +208,7 @@ export default function FeedPage() {
             fontSize: '14px',
           }}
         >
-          Twittear
+          Tweet
         </Link>
       </header>
 
