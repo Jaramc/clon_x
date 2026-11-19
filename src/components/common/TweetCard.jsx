@@ -14,12 +14,20 @@ export default function TweetCard({ tweet }) {
       <div className="avatar">{initial}</div>
       <div className="tweet-content">
         <div className="tweet-meta">
-          <strong>{fullName}</strong>
+          <strong>{fullName},</strong>
           <span>
             @{username} - <time dateTime={tweet.createdAt}>{formatDate(tweet.createdAt)}</time>
           </span>
         </div>
-        <p>{text}</p>
+        {text && <p>{text}</p>}
+        {typeof tweet.imageUrl === 'string' && tweet.imageUrl.startsWith('data:image/') && (
+          <img
+            className="tweet-image"
+            src={tweet.imageUrl}
+            alt={`Imagen publicada por @${username}`}
+            loading="lazy"
+          />
+        )}
       </div>
     </article>
   );
