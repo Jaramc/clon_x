@@ -249,7 +249,7 @@ export default function FollowingPage() {
       {showListTweets && (
         <div style={{ borderBottom: '1px solid var(--line)' }}>
           {listTweets.length > 0 ? (
-            listTweets.map((chirp) => <TweetCard key={chirp.id} tweet={chirp} />)
+            listTweets.map((tweet) => <TweetCard key={tweet.id} tweet={tweet} />)
           ) : (
             <EmptyState
               title="Sin publicaciones"

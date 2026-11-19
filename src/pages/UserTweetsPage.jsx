@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getUserByUsername } from '../services/userService';
-import { getTweetsByUser } from '../services/tweetService';
+import { TWEETS_COLLECTION, getTweetsByUser } from '../services/tweetService';
 import {
   subscribeToFollowCounts,
   subscribeToFollowStatus,
@@ -26,7 +26,7 @@ export default function UserTweetsPage() {
   const { toast, showToast, clearToast } = useToast();
 
   const [target, setTarget] = useState(null);
-  const [chirps, setChirps] = useState([]);
+  const [tweets, setTweets] = useState([]);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
@@ -90,22 +90,22 @@ export default function UserTweetsPage() {
     };
   }, [username, currentId, currentUser]);
 
-  // Query chirps_v2 filtered by target userId with real-time snapshot
+  // Query tweets filtered by target userId with real-time snapshot
   useEffect(() => {
     const targetId = target?.id || target?.uid;
     if (!targetId) {
-      setChirps([]);
+      setTweets([]);
       return undefined;
     }
 
     let active = true;
-    let unsubscribeChirps = () => {};
+    let unsubscribeTweets = () => {};
 
     try {
-      const chirpsQuery = query(collection(db, 'chirps_v2'), where('userId', '==', targetId));
+      const tweetsQuery = query(collection(db, TWEETS_COLLECTION), where('userId', '==', targetId));
 
-      unsubscribeChirps = onSnapshot(
-        chirpsQuery,
+      unsubscribeTweets = onSnapshot(
+        tweetsQuery,
         (snapshot) => {
           if (!active) return;
           const items = snapshot.docs
@@ -113,30 +113,30 @@ export default function UserTweetsPage() {
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
           if (items.length > 0) {
-            setChirps(items);
+            setTweets(items);
           } else {
             // Fallback for mock tweets if firestore has no documents
             getTweetsByUser(targetId).then((fallback) => {
-              if (active) setChirps(fallback || []);
+              if (active) setTweets(fallback || []);
             });
           }
         },
         async (err) => {
           console.warn('Real-time tweets listener error, using fallback:', err.message);
           const fallback = await getTweetsByUser(targetId);
-          if (active) setChirps(fallback || []);
+          if (active) setTweets(fallback || []);
         }
       );
     } catch (err) {
-      console.warn('Error creating chirps query:', err.message);
+      console.warn('Error creating tweets query:', err.message);
       getTweetsByUser(targetId).then((fallback) => {
-        if (active) setChirps(fallback || []);
+        if (active) setTweets(fallback || []);
       });
     }
 
     return () => {
       active = false;
-      unsubscribeChirps();
+      unsubscribeTweets();
     };
   }, [target?.id, target?.uid]);
 
@@ -190,7 +190,7 @@ export default function UserTweetsPage() {
 
   // Pagination for user tweets (Milestone 1 requirement: max 10)
   const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
-    usePagination(chirps, 10);
+    usePagination(tweets, 10);
 
   if (loading) return <Spinner />;
   if (error)
@@ -229,7 +229,7 @@ export default function UserTweetsPage() {
             {target.name || target.fullName || target.username}
           </h1>
           <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
-            {chirps.length} {chirps.length === 1 ? 'publicación' : 'publicaciones'}
+            {tweets.length} {tweets.length === 1 ? 'publicación' : 'publicaciones'}
           </span>
         </div>
       </header>
@@ -289,8 +289,8 @@ export default function UserTweetsPage() {
       {paginatedItems.length ? (
         <>
           <div>
-            {paginatedItems.map((chirp) => (
-              <TweetCard key={chirp.id} tweet={chirp} />
+            {paginatedItems.map((tweet) => (
+              <TweetCard key={tweet.id} tweet={tweet} />
             ))}
           </div>
           <Pagination

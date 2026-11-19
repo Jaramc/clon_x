@@ -3,9 +3,9 @@ import { db } from '../lib/firebase';
 import { MAX_TWEET_LENGTH } from '../lib/validators';
 import { mockTweets } from '../mocks/mockTweets';
 
-const CHIRPS_COLLECTION = 'chirps_v2';
+export const TWEETS_COLLECTION = 'tweets';
 
-function mapChirp(snapshot) {
+function mapTweet(snapshot) {
   return { id: snapshot.id, ...snapshot.data() };
 }
 
@@ -15,12 +15,12 @@ let localTweets = [...mockTweets];
 // Get all tweets (supports both mock and Firestore)
 export async function getTweets() {
   try {
-    const snapshot = await getDocs(collection(db, CHIRPS_COLLECTION));
+    const snapshot = await getDocs(collection(db, TWEETS_COLLECTION));
     if (snapshot.empty && localTweets.length > 0) {
       return localTweets;
     }
     return snapshot.docs
-      .map(mapChirp)
+      .map(mapTweet)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (error) {
     console.warn('Falling back to local mock tweets:', error.message);
@@ -37,11 +37,11 @@ export function getFeed() {
 export async function getTweetsByUser(userId) {
   if (!userId) return [];
   try {
-    const chirpsQuery = query(collection(db, CHIRPS_COLLECTION), where('userId', '==', userId));
-    const snapshot = await getDocs(chirpsQuery);
+    const tweetsQuery = query(collection(db, TWEETS_COLLECTION), where('userId', '==', userId));
+    const snapshot = await getDocs(tweetsQuery);
     if (!snapshot.empty) {
       return snapshot.docs
-        .map(mapChirp)
+        .map(mapTweet)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
   } catch (error) {
@@ -66,7 +66,7 @@ export async function createTweet(user, text, imageUrl = null) {
     throw new Error('La publicación no puede superar los 280 caracteres.');
   }
 
-  const chirp = {
+  const tweet = {
     userId: author.id || author.uid || `user-${Date.now()}`,
     username: author.username || 'usuario_demo',
     name: author.name || author.authorName || author.username || 'Usuario',
@@ -78,8 +78,8 @@ export async function createTweet(user, text, imageUrl = null) {
   };
 
   try {
-    const reference = await addDoc(collection(db, CHIRPS_COLLECTION), chirp);
-    const saved = { id: reference.id, ...chirp };
+    const reference = await addDoc(collection(db, TWEETS_COLLECTION), tweet);
+    const saved = { id: reference.id, ...tweet };
     localTweets = [saved, ...localTweets];
     return saved;
   } catch (error) {
