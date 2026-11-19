@@ -13,7 +13,7 @@ import {
 import useAuth from '../hooks/useAuth';
 import usePagination from '../hooks/usePagination';
 import useToast from '../hooks/useToast';
-import ChirpCard from '../components/common/ChirpCard';
+import TweetCard from '../components/common/TweetCard';
 import FollowButton from '../components/common/FollowButton';
 import EmptyState from '../components/common/EmptyState';
 import Spinner from '../components/common/Spinner';
@@ -283,7 +283,7 @@ export default function UserTweetsPage() {
         <>
           <div>
             {paginatedItems.map((chirp) => (
-              <ChirpCard key={chirp.id} chirp={chirp} />
+              <TweetCard key={chirp.id} tweet={chirp} />
             ))}
           </div>
           <Pagination
