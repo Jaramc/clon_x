@@ -8,7 +8,7 @@ import Spinner from '../components/common/Spinner';
 import Pagination from '../components/common/Pagination';
 import useAuth from '../hooks/useAuth';
 import usePagination from '../hooks/usePagination';
-import { getTweets } from '../services/tweetService';
+import { TWEETS_COLLECTION, getTweets } from '../services/tweetService';
 import { getFollowerIds, getFollowingIds } from '../services/followService';
 
 // Real-time integrated feed combining own tweets, followed users, and followers in chronological order
@@ -27,10 +27,10 @@ export default function FeedPage() {
 
   const userId = user?.id || user?.uid;
 
-  // 1. Real-time listener for tweets collection ('chirps_v2') with fallback
+  // 1. Real-time listener for tweets collection ('tweets') with fallback
   useEffect(() => {
     let active = true;
-    let unsubscribeChirps = () => {};
+    let unsubscribeTweets = () => {};
 
     async function initFeed() {
       setLoading(true);
@@ -43,9 +43,9 @@ export default function FeedPage() {
         setRawTweets(initialTweets || []);
 
         // Real-time snapshot listener on Firestore
-        const chirpsCollection = collection(db, 'chirps_v2');
-        unsubscribeChirps = onSnapshot(
-          chirpsCollection,
+        const tweetsCollection = collection(db, TWEETS_COLLECTION);
+        unsubscribeTweets = onSnapshot(
+          tweetsCollection,
           (snapshot) => {
             if (!active) return;
             const updated = snapshot.docs
@@ -54,7 +54,7 @@ export default function FeedPage() {
             setRawTweets(updated);
           },
           (err) => {
-            console.warn('Real-time chirps subscription fallback:', err.message);
+            console.warn('Real-time tweets subscription fallback:', err.message);
           }
         );
       } catch (err) {
@@ -68,7 +68,7 @@ export default function FeedPage() {
 
     return () => {
       active = false;
-      unsubscribeChirps();
+      unsubscribeTweets();
     };
   }, []);
 
@@ -128,7 +128,7 @@ export default function FeedPage() {
   }, [userId]);
 
   // 3. Milestone 2 requirement: Combine own tweets + followed + followers in chronological order
-  const filteredChirps = useMemo(() => {
+  const filteredTweets = useMemo(() => {
     if (!userId) {
       return rawTweets;
     }
@@ -140,13 +140,13 @@ export default function FeedPage() {
     const targetSet = activeTab === 'following' ? followingAllowed : forYouAllowed;
 
     return rawTweets
-      .filter((chirp) => targetSet.has(chirp.userId || chirp.uid))
+      .filter((tweet) => targetSet.has(tweet.userId || tweet.uid))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [rawTweets, userId, followedIds, followerIds, activeTab]);
 
   // 4. Milestone 1 requirement: pagination with max 10 items
   const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
-    usePagination(filteredChirps, 10);
+    usePagination(filteredTweets, 10);
 
   const renderFeedContent = () => {
     if (loading) return <Spinner />;
@@ -160,8 +160,8 @@ export default function FeedPage() {
       return (
         <>
           <div>
-            {paginatedItems.map((chirp) => (
-              <TweetCard key={chirp.id} tweet={chirp} />
+            {paginatedItems.map((tweet) => (
+              <TweetCard key={tweet.id} tweet={tweet} />
             ))}
           </div>
 

@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Firestore security rules for clon_x.
-// Collections: users, usernames, chirps_v2 (posts), follows.
+// Collections: users, usernames, tweets (posts), follows.
 // Images are stored inside each post as a base64 data URL (imageUrl).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -97,9 +97,9 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ---------- chirps_v2/{postId} ----------
+    // ---------- tweets/{postId} ----------
     // Posts. imageUrl is optional and holds a base64 image data URL.
-    match /chirps_v2/{postId} {
+    match /tweets/{postId} {
       allow read: if isSignedIn();
 
       allow create: if isSignedIn()
