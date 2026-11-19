@@ -1,13 +1,4 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  runTransaction,
-  setDoc,
-  where,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, runTransaction, where } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { normalizeUsername } from '../lib/validators';
 import { mockUsers } from '../mocks/mockUsers';
@@ -131,9 +122,9 @@ export async function createUserProfile(uid, values) {
     if (error.message.includes('nombre de usuario ya está')) {
       throw error;
     }
-    console.warn('Transaction failed, attempting direct setDoc:', error.message);
-    await setDoc(userRef, profile);
-    await setDoc(usernameRef, { uid, email, username, usernameLower });
+    // Never write without the uniqueness check; let the caller roll back
+    console.error('Failed to create user profile:', error);
+    throw new Error('No se pudo guardar el perfil. Inténtalo de nuevo.');
   }
 
   return {

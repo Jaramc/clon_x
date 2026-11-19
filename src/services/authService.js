@@ -12,6 +12,7 @@ import { validateRegistration, normalizeUsername } from '../lib/validators';
 import { createUserProfile, getUserByUsername } from './userService';
 
 const googleProvider = new GoogleAuthProvider();
+const USERNAME_MAX_LENGTH = 20;
 
 // Retrieve current session profile from Firestore
 export async function getSession() {
@@ -76,7 +77,7 @@ export async function registerUser(values) {
     }
 
     if (error.code === 'auth/weak-password') {
-      throw new Error('La contraseña debe tener al menos 6 caracteres.');
+      throw new Error('La contraseña debe tener al menos 8 caracteres.');
     }
 
     if (error.code === 'permission-denied') {
@@ -112,6 +113,7 @@ export async function loginUser(identifier, password) {
     const snapshot = await getDoc(doc(db, 'users', credential.user.uid));
 
     if (!snapshot.exists()) {
+      await signOut(auth);
       throw new Error(
         'La cuenta existe, pero no tiene un perfil registrado en Firestore.'
       );
@@ -152,21 +154,36 @@ export async function loginWithGoogle() {
 
   // Create profile for first-time Google sign-in
   const email = firebaseUser.email || '';
-  const baseUsername = normalizeUsername(email.split('@')[0] || 'user');
+  const baseUsername = buildGoogleUsername(email);
 
-  let username = baseUsername;
-  let suffix = 1;
+  try {
+    let username = baseUsername;
+    let suffix = 1;
 
-  while (await getUserByUsername(username)) {
-    username = `${baseUsername}${suffix}`;
-    suffix += 1;
+    while (await getUserByUsername(username)) {
+      const suffixText = String(suffix);
+      username = `${baseUsername.slice(0, USERNAME_MAX_LENGTH - suffixText.length)}${suffixText}`;
+      suffix += 1;
+    }
+
+    return await createUserProfile(firebaseUser.uid, {
+      username,
+      email,
+      name: firebaseUser.displayName || username,
+    });
+  } catch (error) {
+    // Do not leave a signed-in session without a Firestore profile
+    await signOut(auth).catch(() => {});
+    throw error;
   }
+}
 
-  return await createUserProfile(firebaseUser.uid, {
-    username,
-    email,
-    name: firebaseUser.displayName || username,
-  });
+// Build a username that matches the registration rule ^[a-zA-Z0-9_]{3,20}$
+function buildGoogleUsername(email) {
+  const cleaned = normalizeUsername(email.split('@')[0] || '')
+    .replace(/[^a-z0-9_]/g, '_')
+    .slice(0, USERNAME_MAX_LENGTH);
+  return cleaned.length >= 3 ? cleaned : `user_${cleaned}`.slice(0, USERNAME_MAX_LENGTH);
 }
 
 // Sign out current authenticated user

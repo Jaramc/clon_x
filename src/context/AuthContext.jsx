@@ -16,6 +16,12 @@ import {
 
 export const AuthContext = createContext(null);
 
+// Keep an already loaded profile for the same uid instead of replacing it with a bare fallback
+function keepProfileOrFallback(previous, firebaseUser) {
+  if (previous?.uid === firebaseUser.uid && previous.username) return previous;
+  return { id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,14 +37,15 @@ export function AuthProvider({ children }) {
       try {
         const snapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
 
-        setUser(
-          snapshot.exists()
-            ? { id: snapshot.id, uid: snapshot.id, ...snapshot.data() }
-            : { id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email }
-        );
+        if (snapshot.exists()) {
+          setUser({ id: snapshot.id, uid: snapshot.id, ...snapshot.data() });
+        } else {
+          // Profile may still be being written by register(); keep it if already set
+          setUser((previous) => keepProfileOrFallback(previous, firebaseUser));
+        }
       } catch (error) {
         console.error('Failed to load user profile from Firestore:', error);
-        setUser({ id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email });
+        setUser((previous) => keepProfileOrFallback(previous, firebaseUser));
       } finally {
         setLoading(false);
       }
