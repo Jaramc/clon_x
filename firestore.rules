@@ -1,0 +1,161 @@
+rules_version = '2';
+
+// Firestore security rules for clon_x.
+// Collections: users, usernames, chirps_v2 (posts), follows.
+// Images are stored inside each post as a base64 data URL (imageUrl).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidUsername(value) {
+      return value is string && value.matches('^[A-Za-z0-9_]{3,20}$');
+    }
+
+    function isNonEmptyString(value, maxSize) {
+      return value is string && value.size() > 0 && value.size() <= maxSize;
+    }
+
+    function isIsoDate(value) {
+      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*');
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function usernamePath(name) {
+      return /databases/$(database)/documents/usernames/$(name);
+    }
+
+    // ---------- users/{uid} ----------
+    // Public profile. Readable without a session because login by @username and
+    // the "username taken" check on /register run before signing in.
+    match /users/{uid} {
+      allow get: if true;
+      allow list: if isSignedIn();
+
+      // Created together with usernames/{usernameLower} in one transaction.
+      allow create: if isOwner(uid)
+        && incoming().keys().hasOnly(['username', 'usernameLower', 'name', 'email', 'bio', 'avatar', 'createdAt'])
+        && incoming().keys().hasAll(['username', 'usernameLower', 'name', 'email', 'createdAt'])
+        && isValidUsername(incoming().username)
+        && incoming().usernameLower == incoming().username.lower()
+        && isNonEmptyString(incoming().name, 50)
+        && incoming().email is string
+        && request.auth.token.email != null
+        && incoming().email == request.auth.token.email.lower()
+        && (!('bio' in incoming()) || (incoming().bio is string && incoming().bio.size() <= 160))
+        && (!('avatar' in incoming()) || (incoming().avatar is string && incoming().avatar.size() <= 4))
+        && isIsoDate(incoming().createdAt)
+        // The username index must point to this same user after the transaction.
+        && getAfter(usernamePath(incoming().usernameLower)).data.uid == uid;
+
+      // Only name, bio and avatar can change; username and email are fixed.
+      allow update: if isOwner(uid)
+        && incoming().diff(resource.data).affectedKeys().hasOnly(['name', 'bio', 'avatar'])
+        && isNonEmptyString(incoming().name, 50)
+        && (!('bio' in incoming()) || (incoming().bio is string && incoming().bio.size() <= 160))
+        && (!('avatar' in incoming()) || (incoming().avatar is string && incoming().avatar.size() <= 4));
+
+      allow delete: if false;
+    }
+
+    // ---------- usernames/{usernameLower} ----------
+    // Unique index: the document id is the lowercase username.
+    // "create" only applies when the document does not exist yet, which is
+    // what guarantees that two accounts cannot take the same username.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().keys().hasOnly(['uid', 'email', 'username', 'usernameLower', 'createdAt'])
+        && incoming().keys().hasAll(['uid', 'email', 'username', 'usernameLower'])
+        && isValidUsername(incoming().username)
+        && incoming().usernameLower == name
+        && incoming().username.lower() == name
+        && incoming().email is string
+        && request.auth.token.email != null
+        && incoming().email == request.auth.token.email.lower()
+        // The user's profile must reference this username after the transaction.
+        && getAfter(userPath(request.auth.uid)).data.usernameLower == name;
+
+      allow update, delete: if false;
+    }
+
+    // ---------- chirps_v2/{postId} ----------
+    // Posts. imageUrl is optional and holds a base64 image data URL.
+    match /chirps_v2/{postId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && incoming().keys().hasOnly(['userId', 'username', 'name', 'text', 'content', 'imageUrl', 'likes', 'createdAt'])
+        && incoming().keys().hasAll(['userId', 'username', 'name', 'text', 'content', 'likes', 'createdAt'])
+        // Author must be the signed-in user, with the username from their profile.
+        && incoming().userId == request.auth.uid
+        && exists(userPath(request.auth.uid))
+        && incoming().username == get(userPath(request.auth.uid)).data.username
+        && isNonEmptyString(incoming().name, 50)
+        // Text: up to 280 characters; text and content are the same value.
+        && incoming().text is string
+        && incoming().text.size() <= 280
+        && incoming().content == incoming().text
+        && isValidImage(incoming().get('imageUrl', null))
+        // A post needs text or an image.
+        && (incoming().text.size() > 0 || incoming().get('imageUrl', null) != null)
+        && incoming().likes == 0
+        && isIsoDate(incoming().createdAt);
+
+      // Posts cannot be edited. The author can delete them.
+      allow update: if false;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    // null, or a PNG/JPEG/GIF/WebP base64 data URL that fits in a Firestore
+    // document (1 MiB limit for the whole document). SVG is not allowed.
+    function isValidImage(value) {
+      return value == null
+        || (value is string
+          && value.size() <= 1000000
+          && value.matches('^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$'));
+    }
+
+    // ---------- follows/{followerId_followingId} ----------
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+
+      // create and update (setDoc over an existing follow) use the same checks.
+      allow create, update: if isSignedIn()
+        && incoming().keys().hasOnly(['followerId', 'followingId', 'createdAt'])
+        && incoming().keys().hasAll(['followerId', 'followingId', 'createdAt'])
+        && incoming().followerId == request.auth.uid
+        && incoming().followingId is string
+        && incoming().followingId != request.auth.uid
+        && followId == incoming().followerId + '_' + incoming().followingId
+        && exists(userPath(incoming().followingId))
+        && isIsoDate(incoming().createdAt);
+
+      // Only the follower can unfollow.
+      allow delete: if isOwner(resource.data.followerId);
+    }
+
+    // ---------- Everything else is denied ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

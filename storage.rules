@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Firebase Storage security rules for clon_x.
+// The app currently stores post images inside Firestore (base64 in imageUrl),
+// so Storage is not used yet. This path is ready in case images move here:
+//   tweet-images/{uid}/{fileName}
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /tweet-images/{uid}/{fileName} {
+      // Any signed-in user can see post images.
+      allow read: if request.auth != null;
+
+      // Only the owner uploads to their own folder: PNG/JPEG/GIF/WebP up to 5 MB.
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|gif|webp)');
+
+      // Files cannot be overwritten; the owner can delete them.
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else is denied.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

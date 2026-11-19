@@ -30,9 +30,9 @@ export default function ComposePage() {
       return;
     }
 
-    // Guard against Firestore 1MB document size limit
-    if (file.size > 800 * 1024) {
-      setError('La imagen es demasiado pesada. Elige una imagen de menos de 800 KB.');
+    // Base64 grows ~33%: 700 KB -> ~956 KB, under the 1 MiB Firestore document limit
+    if (file.size > 700 * 1024) {
+      setError('La imagen es demasiado pesada. Elige una imagen de menos de 700 KB.');
       return;
     }
 
