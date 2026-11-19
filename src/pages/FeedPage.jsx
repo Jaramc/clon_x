@@ -39,9 +39,8 @@ export default function FeedPage() {
       try {
         // Initial fetch to ensure instant display
         const initialTweets = await getTweets();
-        if (active) {
-          setRawTweets(initialTweets || []);
-        }
+        if (!active) return;
+        setRawTweets(initialTweets || []);
 
         // Real-time snapshot listener on Firestore
         const chirpsCollection = collection(db, 'chirps_v2');
