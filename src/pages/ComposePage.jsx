@@ -6,6 +6,9 @@ import Toast from '../components/common/Toast';
 import { createTweet } from '../services/tweetService';
 import { MAX_TWEET_LENGTH } from '../lib/validators';
 
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const MAX_IMAGE_SIZE = 700 * 1024;
+
 export default function ComposePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -25,14 +28,16 @@ export default function ComposePage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setError('Por favor, selecciona un archivo de imagen válido.');
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Formato no compatible. Usa una imagen PNG, JPG, GIF o WebP.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     // Base64 grows ~33%: 700 KB -> ~956 KB, under the 1 MiB Firestore document limit
-    if (file.size > 700 * 1024) {
+    if (file.size > MAX_IMAGE_SIZE) {
       setError('La imagen es demasiado pesada. Elige una imagen de menos de 700 KB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -181,7 +186,7 @@ export default function ComposePage() {
           <input
             type="file"
             ref={fileInputRef}
-            accept="image/*"
+            accept={ALLOWED_IMAGE_TYPES.join(',')}
             onChange={handleImageChange}
             style={{ display: 'none' }}
             disabled={busy}
@@ -197,6 +202,7 @@ export default function ComposePage() {
               className="button button--outline"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy}
+              title="PNG, JPG, GIF o WebP, máximo 700 KB"
               style={{
                 fontSize: '13px',
                 padding: '6px 12px',
