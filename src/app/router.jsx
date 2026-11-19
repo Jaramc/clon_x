@@ -53,6 +53,10 @@ const router = createBrowserRouter([
         element: <FollowingPage />,
       },
       {
+        path: 'profile',
+        element: <UserTweetsPage />,
+      },
+      {
         path: 'users/:username',
         element: <UserTweetsPage />,
       },

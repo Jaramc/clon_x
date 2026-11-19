@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import ChirpCard from '../components/common/ChirpCard';
+import TweetCard from '../components/common/TweetCard';
 import EmptyState from '../components/common/EmptyState';
 import Spinner from '../components/common/Spinner';
 import Pagination from '../components/common/Pagination';
@@ -39,9 +39,8 @@ export default function FeedPage() {
       try {
         // Initial fetch to ensure instant display
         const initialTweets = await getTweets();
-        if (active) {
-          setRawTweets(initialTweets || []);
-        }
+        if (!active) return;
+        setRawTweets(initialTweets || []);
 
         // Real-time snapshot listener on Firestore
         const chirpsCollection = collection(db, 'chirps_v2');
@@ -241,7 +240,7 @@ export default function FeedPage() {
         <>
           <div>
             {paginatedItems.map((chirp) => (
-              <ChirpCard key={chirp.id} chirp={chirp} />
+              <TweetCard key={chirp.id} tweet={chirp} />
             ))}
           </div>
 

@@ -41,30 +41,35 @@ export function getFeed() {
 
 // Get tweets published by a specific user ID
 export async function getTweetsByUser(userId) {
+  if (!userId) return [];
   try {
     const chirpsQuery = query(
       collection(db, CHIRPS_COLLECTION),
       where('userId', '==', userId)
     );
     const snapshot = await getDocs(chirpsQuery);
-    return snapshot.docs
-      .map(mapChirp)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (!snapshot.empty) {
+      return snapshot.docs
+        .map(mapChirp)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
   } catch (error) {
     console.warn('Falling back to local user tweets:', error.message);
-    return localTweets.filter(
-      (tweet) => tweet.userId === userId || tweet.authorUsername === userId
-    );
   }
+
+  // Fallback to local memory tweets
+  return localTweets
+    .filter((tweet) => tweet.userId === userId || tweet.authorUsername === userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-// Create and save a new tweet
-export async function createTweet(user, text) {
+// Create and save a new tweet with optional image
+export async function createTweet(user, text, imageUrl = null) {
   const author = typeof user === 'object' ? user : { username: 'usuario_demo', name: 'Mi Usuario' };
   const content = typeof user === 'string' ? user : text;
   const trimmed = (content || '').trim();
 
-  if (!trimmed) throw new Error('Escribe algo antes de publicar.');
+  if (!trimmed && !imageUrl) throw new Error('Escribe algo o adjunta una imagen antes de publicar.');
   if (trimmed.length > (MAX_TWEET_LENGTH || 280)) {
     throw new Error('La publicación no puede superar los 280 caracteres.');
   }
@@ -75,6 +80,7 @@ export async function createTweet(user, text) {
     name: author.name || author.authorName || author.username || 'Usuario',
     text: trimmed,
     content: trimmed,
+    imageUrl: imageUrl || null,
     likes: 0,
     createdAt: new Date().toISOString(),
   };
@@ -85,10 +91,8 @@ export async function createTweet(user, text) {
     localTweets = [saved, ...localTweets];
     return saved;
   } catch (error) {
-    console.warn('Saving tweet locally in memory:', error.message);
-    const localSaved = { id: `tweet-${Date.now()}`, ...chirp };
-    localTweets = [localSaved, ...localTweets];
-    return localSaved;
+    console.error('Failed to save tweet:', error);
+    throw new Error('No se pudo guardar la publicación. Inténtalo de nuevo.');
   }
 }
 
