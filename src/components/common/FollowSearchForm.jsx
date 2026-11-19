@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import useAuth from '../../hooks/useAuth';
-import { followByUsername } from '../../services/followService';
+import { getUserByUsername } from '../../services/userService';
+import { isFollowing } from '../../services/followService';
+import UserCard from './UserCard';
 
 // Reusable search form to follow any user by exact @username with instant validation and feedback
 export default function FollowSearchForm({ onFollowSuccess }) {
@@ -9,6 +11,7 @@ export default function FollowSearchForm({ onFollowSuccess }) {
   const [message, setMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null); // { user, following } | null
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -27,22 +30,49 @@ export default function FollowSearchForm({ onFollowSuccess }) {
     }
 
     setMessage('');
+    setResult(null);
     setBusy(true);
 
     try {
-      const followedUser = await followByUsername(user, cleanUsername);
-      setIsSuccess(true);
-      setMessage(`¡Genial! Ahora sigues a @${followedUser.username}.`);
-      setTargetUsername('');
+      const found = await getUserByUsername(cleanUsername);
+      if (!found) {
+        setIsSuccess(false);
+        setMessage('No encontramos un usuario con ese nombre.');
+        return;
+      }
 
-      if (typeof onFollowSuccess === 'function') {
-        onFollowSuccess(followedUser);
+      const currentId = user.id || user.uid;
+      const targetId = found.id || found.uid;
+      if (targetId === currentId) {
+        setIsSuccess(false);
+        setMessage('Ese es tu propio usuario.');
+        return;
+      }
+
+      const alreadyFollowing = await isFollowing(currentId, targetId);
+      setResult({ user: found, following: alreadyFollowing });
+      if (alreadyFollowing) {
+        setIsSuccess(true);
+        setMessage(`Ya sigues a @${found.username}.`);
       }
     } catch (err) {
       setIsSuccess(false);
-      setMessage(err?.message || 'No se pudo seguir al usuario.');
+      setMessage(err?.message || 'No se pudo buscar el usuario.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleFollowChange = (nowFollowing) => {
+    setResult((prev) => (prev ? { ...prev, following: nowFollowing } : prev));
+    setIsSuccess(true);
+    setMessage(
+      nowFollowing
+        ? `¡Listo! Ahora sigues a @${result.user.username}.`
+        : `Dejaste de seguir a @${result.user.username}.`
+    );
+    if (nowFollowing && typeof onFollowSuccess === 'function') {
+      onFollowSuccess(result.user);
     }
   };
 
@@ -56,14 +86,18 @@ export default function FollowSearchForm({ onFollowSuccess }) {
         htmlFor="follow-search-input"
         style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '8px' }}
       >
-        Seguir por nombre de usuario (@username)
+        Buscar usuario por nombre de usuario (@username)
       </label>
 
       <div style={{ display: 'flex', gap: '8px' }}>
         <input
           id="follow-search-input"
           value={targetUsername}
-          onChange={(e) => setTargetUsername(e.target.value)}
+          onChange={(e) => {
+            setTargetUsername(e.target.value);
+            setResult(null);
+            setMessage('');
+          }}
           placeholder="ej: @maria_gonzalez o ana_dev"
           disabled={busy}
           required
@@ -76,7 +110,7 @@ export default function FollowSearchForm({ onFollowSuccess }) {
           disabled={busy || !targetUsername.trim()}
           style={{ minWidth: '100px' }}
         >
-          {busy ? 'Buscando...' : 'Seguir'}
+          {busy ? 'Buscando...' : 'Buscar'}
         </button>
       </div>
 
@@ -88,6 +122,15 @@ export default function FollowSearchForm({ onFollowSuccess }) {
         >
           {message}
         </p>
+      )}
+
+      {result && (
+        <UserCard
+          user={result.user}
+          currentUser={user}
+          followingIds={result.following ? [result.user.id || result.user.uid] : []}
+          onFollowChange={handleFollowChange}
+        />
       )}
     </form>
   );
