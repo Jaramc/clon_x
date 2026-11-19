@@ -1,4 +1,3 @@
-
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -6,152 +5,181 @@ import {
   signOut,
   deleteUser,
   GoogleAuthProvider,
-} from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
-import { validateRegistration, normalizeUsername } from "../lib/validators";
-import {
-  createUserProfile,
-  getUserByUsername,
-} from "./userService";
+} from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { validateRegistration, normalizeUsername } from '../lib/validators';
+import { createUserProfile, getUserByUsername } from './userService';
 
 const googleProvider = new GoogleAuthProvider();
+const USERNAME_MAX_LENGTH = 20;
 
+// Retrieve current session profile from Firestore
 export async function getSession() {
-  const currentUser = auth.currentUser;
-
+  const { currentUser } = auth;
   if (!currentUser) return null;
 
-  const snapshot = await getDoc(doc(db, "users", currentUser.uid));
+  try {
+    const snapshot = await getDoc(doc(db, 'users', currentUser.uid));
+    if (snapshot.exists()) {
+      return { id: snapshot.id, uid: snapshot.id, ...snapshot.data() };
+    }
+  } catch (error) {
+    console.warn('Failed to load session profile from Firestore:', error.message);
+  }
 
-  return snapshot.exists()
-    ? { id: snapshot.id, ...snapshot.data() }
-    : null;
+  return {
+    id: currentUser.uid,
+    uid: currentUser.uid,
+    email: currentUser.email,
+  };
 }
 
+// Register a new user with transactional username and email uniqueness
 export async function registerUser(values) {
   const errors = validateRegistration(values);
-
   if (Object.keys(errors).length) {
     throw new Error(Object.values(errors)[0]);
+  }
+
+  const cleanUsername = values.username.trim().replace(/^@/, '');
+  const usernameLower = normalizeUsername(cleanUsername);
+
+  // 1. Strict pre-validation: check if username is already taken
+  const existingUser = await getUserByUsername(usernameLower);
+  if (existingUser) {
+    throw new Error('Ese nombre de usuario ya está en uso. Por favor elige otro.');
   }
 
   let credential;
 
   try {
+    // 2. Create user in Firebase Authentication
     credential = await createUserWithEmailAndPassword(
       auth,
       values.email.trim().toLowerCase(),
       values.password
     );
 
-    return await createUserProfile(credential.user.uid, values);
+    // 3. Create user profile and index in 'usernames' collection
+    return await createUserProfile(credential.user.uid, {
+      ...values,
+      username: cleanUsername,
+    });
   } catch (error) {
+    // Rollback auth user if profile document creation failed
     if (credential?.user) {
       await deleteUser(credential.user).catch(() => {});
     }
 
-    if (error.code === "auth/email-already-in-use") {
-      throw new Error("Ese correo electrónico ya está registrado.");
+    if (error.code === 'auth/email-already-in-use') {
+      throw new Error('Ese correo electrónico ya está registrado.');
     }
 
-    if (error.code === "auth/weak-password") {
-      throw new Error("La contraseña debe ser más segura.");
+    if (error.code === 'auth/weak-password') {
+      throw new Error('La contraseña debe tener al menos 8 caracteres.');
     }
 
-    if (error.code === "permission-denied") {
-      throw new Error(
-        "Firebase no permite guardar el perfil. Revisa las reglas de Firestore."
-      );
+    if (error.code === 'permission-denied') {
+      throw new Error('Firebase no permite guardar el perfil. Revisa las reglas de Firestore.');
     }
 
     throw error;
   }
 }
 
-export async function loginUser(username, password) {
-  const user = await getUserByUsername(normalizeUsername(username));
-
-  if (!user?.email) {
-    throw new Error("Usuario o contraseña incorrectos.");
-  }
-
+// Sign in with email or @username and password
+export async function loginUser(identifier, password) {
   try {
-    const credential = await signInWithEmailAndPassword(
-      auth,
-      user.email,
-      password
-    );
+    let email = (identifier || '').trim();
 
-    const snapshot = await getDoc(
-      doc(db, "users", credential.user.uid)
-    );
+    // If identifier is an @username (does not contain @ or starts with @), resolve email
+    if (!email.includes('@') || email.startsWith('@')) {
+      const userProfile = await getUserByUsername(email);
+      if (!userProfile || !userProfile.email) {
+        throw new Error('No existe una cuenta registrada con ese nombre de usuario.');
+      }
+      email = userProfile.email;
+    }
+
+    const credential = await signInWithEmailAndPassword(auth, email.toLowerCase(), password);
+
+    const snapshot = await getDoc(doc(db, 'users', credential.user.uid));
 
     if (!snapshot.exists()) {
       await signOut(auth);
-      throw new Error("No se encontró el perfil de este usuario.");
+      throw new Error('La cuenta existe, pero no tiene un perfil registrado en Firestore.');
     }
 
-    return { id: snapshot.id, ...snapshot.data() };
+    return {
+      id: snapshot.id,
+      uid: snapshot.id,
+      ...snapshot.data(),
+    };
   } catch (error) {
     if (
-      error.code === "auth/invalid-credential" ||
-      error.code === "auth/user-not-found" ||
-      error.code === "auth/wrong-password"
+      error.code === 'auth/invalid-credential' ||
+      error.code === 'auth/user-not-found' ||
+      error.code === 'auth/wrong-password' ||
+      error.code === 'auth/invalid-email'
     ) {
-      throw new Error("Usuario o contraseña incorrectos.");
+      throw new Error('Correo, usuario o contraseña incorrectos.');
     }
 
     throw error;
   }
 }
 
+// Build a username that matches the registration rule ^[a-zA-Z0-9_]{3,20}$
+function buildGoogleUsername(email) {
+  const cleaned = normalizeUsername(email.split('@')[0] || '')
+    .replace(/[^a-z0-9_]/g, '_')
+    .slice(0, USERNAME_MAX_LENGTH);
+  return cleaned.length >= 3 ? cleaned : `user_${cleaned}`.slice(0, USERNAME_MAX_LENGTH);
+}
+
+// Sign in or register with Google popup and automatically create Firestore profile
 export async function loginWithGoogle() {
   const credential = await signInWithPopup(auth, googleProvider);
   const firebaseUser = credential.user;
 
-  const snapshot = await getDoc(doc(db, "users", firebaseUser.uid));
-
-  if (snapshot.exists()) {
-    return { id: snapshot.id, ...snapshot.data() };
+  try {
+    const snapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
+    if (snapshot.exists()) {
+      return { id: snapshot.id, uid: snapshot.id, ...snapshot.data() };
+    }
+  } catch (error) {
+    console.warn('Checking Google user profile:', error.message);
   }
 
-  const email = firebaseUser.email || "";
-  const baseUsername = normalizeUsername(
-    email.split("@")[0] || "user"
-  );
+  // Create profile for first-time Google sign-in
+  const email = firebaseUser.email || '';
+  const baseUsername = buildGoogleUsername(email);
 
-  let username = baseUsername;
-  let suffix = 1;
+  try {
+    let username = baseUsername;
+    let suffix = 1;
 
-  while (await getUserByUsername(username)) {
-    username = `${baseUsername}${suffix}`;
-    suffix += 1;
+    // eslint-disable-next-line no-await-in-loop -- each check depends on the previous suffix
+    while (await getUserByUsername(username)) {
+      const suffixText = String(suffix);
+      username = `${baseUsername.slice(0, USERNAME_MAX_LENGTH - suffixText.length)}${suffixText}`;
+      suffix += 1;
+    }
+
+    return await createUserProfile(firebaseUser.uid, {
+      username,
+      email,
+      name: (firebaseUser.displayName || username).trim().slice(0, 50),
+    });
+  } catch (error) {
+    // Do not leave a signed-in session without a Firestore profile
+    await signOut(auth).catch(() => {});
+    throw error;
   }
-
-  const profile = {
-    username,
-    email,
-    name: firebaseUser.displayName || username,
-  };
-
-  const createdProfile = {
-    username,
-    usernameLower: normalizeUsername(username),
-    email,
-    name: profile.name,
-    bio: "",
-    avatar: profile.name.slice(0, 2).toUpperCase(),
-    createdAt: new Date().toISOString(),
-  };
-
-  const { setDoc } = await import("firebase/firestore");
-
-  await setDoc(doc(db, "users", firebaseUser.uid), createdProfile);
-
-  return { id: firebaseUser.uid, ...createdProfile };
 }
 
+// Sign out current authenticated user
 export async function logoutUser() {
   await signOut(auth);
 }

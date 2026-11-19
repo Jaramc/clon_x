@@ -1,13 +1,260 @@
-import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
-import TweetCard from "../components/common/TweetCard";
-import EmptyState from "../components/common/EmptyState";
-import useAuth from "../hooks/useAuth";
-import { getTweets } from "../services/tweetService";
-import { getFollowingIds } from "../services/followService";
+import { useEffect, useState, useMemo } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import TweetCard from '../components/common/TweetCard';
+import EmptyState from '../components/common/EmptyState';
+import Spinner from '../components/common/Spinner';
+import Pagination from '../components/common/Pagination';
+import useAuth from '../hooks/useAuth';
+import usePagination from '../hooks/usePagination';
+import { TWEETS_COLLECTION, getTweets } from '../services/tweetService';
+import { getFollowerIds, getFollowingIds } from '../services/followService';
+
+// Real-time integrated feed combining own tweets, followed users, and followers in chronological order
 export default function FeedPage() {
-  const { user } = useAuth(); const location = useLocation(); const [tweets, setTweets] = useState([]);
-  const refresh = () => { const followed = getFollowingIds(user.id); setTweets(getTweets().filter((t) => t.userId === user.id || followed.includes(t.userId))); };
-  useEffect(() => { refresh(); }, [user.id, location.key]);
-  return <section><header className="page-header"><h1>Inicio</h1><div className="feed-tabs"><span className="active">Para ti</span><span>Siguiendo</span></div></header>{location.state?.notice && <div className="inline-notice">{location.state.notice}</div>}{tweets.length ? tweets.map((tweet) => <TweetCard key={tweet.id} tweet={tweet}/>) : <EmptyState title="Tu feed está esperando" description="Sigue a otros usuarios o publica tu primer tweet para comenzar."/>}</section>;
+  const { user } = useAuth();
+  const location = useLocation();
+
+  const [rawTweets, setRawTweets] = useState([]);
+  const [activeTab, setActiveTab] = useState('forYou'); // 'forYou' | 'following'
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followedIds, setFollowedIds] = useState([]);
+
+  const userId = user?.id || user?.uid;
+
+  // 1. Real-time listener for tweets collection ('tweets') with fallback
+  useEffect(() => {
+    let active = true;
+    let unsubscribeTweets = () => {};
+
+    async function initFeed() {
+      setLoading(true);
+      setError('');
+
+      try {
+        // Initial fetch to ensure instant display
+        const initialTweets = await getTweets();
+        if (!active) return;
+        setRawTweets(initialTweets || []);
+
+        // Real-time snapshot listener on Firestore
+        const tweetsCollection = collection(db, TWEETS_COLLECTION);
+        unsubscribeTweets = onSnapshot(
+          tweetsCollection,
+          (snapshot) => {
+            if (!active) return;
+            const updated = snapshot.docs
+              .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setRawTweets(updated);
+          },
+          (err) => {
+            console.warn('Real-time tweets subscription fallback:', err.message);
+          }
+        );
+      } catch (err) {
+        if (active) setError(err.message || 'No se pudo cargar el feed.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    initFeed();
+
+    return () => {
+      active = false;
+      unsubscribeTweets();
+    };
+  }, []);
+
+  // 2. Real-time listeners for following and followers IDs
+  useEffect(() => {
+    if (!userId) {
+      setFollowedIds([]);
+      setFollowingCount(0);
+      setFollowersCount(0);
+      return undefined;
+    }
+
+    let unsubFollowing = () => {};
+    let unsubFollowers = () => {};
+
+    try {
+      const followingQuery = query(collection(db, 'follows'), where('followerId', '==', userId));
+      unsubFollowing = onSnapshot(
+        followingQuery,
+        (snapshot) => {
+          const ids = snapshot.docs.map((d) => d.data().followingId).filter(Boolean);
+          setFollowedIds(ids);
+          setFollowingCount(ids.length);
+        },
+        async () => {
+          // Fallback async fetch
+          const ids = await getFollowingIds(userId).catch(() => []);
+          setFollowedIds(ids);
+          setFollowingCount(ids.length);
+        }
+      );
+
+      const followersQuery = query(collection(db, 'follows'), where('followingId', '==', userId));
+      unsubFollowers = onSnapshot(
+        followersQuery,
+        (snapshot) => {
+          const ids = snapshot.docs.map((d) => d.data().followerId).filter(Boolean);
+          setFollowersCount(ids.length);
+        },
+        async () => {
+          // Fallback async fetch
+          const ids = await getFollowerIds(userId).catch(() => []);
+          setFollowersCount(ids.length);
+        }
+      );
+    } catch (e) {
+      console.warn('Real-time follow subscription fallback:', e.message);
+    }
+
+    return () => {
+      unsubFollowing();
+      unsubFollowers();
+    };
+  }, [userId]);
+
+  // 3. Feed: own tweets + tweets from followed users, newest first
+  const filteredTweets = useMemo(() => {
+    if (!userId) {
+      return rawTweets;
+    }
+
+    // Allowed authors: myself + people I follow
+    const forYouAllowed = new Set([userId, ...followedIds]);
+    const followingAllowed = new Set(followedIds);
+
+    const targetSet = activeTab === 'following' ? followingAllowed : forYouAllowed;
+
+    return rawTweets
+      .filter((tweet) => targetSet.has(tweet.userId || tweet.uid))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [rawTweets, userId, followedIds, activeTab]);
+
+  // 4. Milestone 1 requirement: pagination with max 10 items
+  const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
+    usePagination(filteredTweets, 10);
+
+  const renderFeedContent = () => {
+    if (loading) return <Spinner />;
+    if (error)
+      return (
+        <p className="form-error" role="alert" style={{ padding: '16px' }}>
+          {error}
+        </p>
+      );
+    if (paginatedItems.length)
+      return (
+        <>
+          <div>
+            {paginatedItems.map((tweet) => (
+              <TweetCard key={tweet.id} tweet={tweet} />
+            ))}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            nextPage={nextPage}
+            previousPage={previousPage}
+            goToPage={goToPage}
+          />
+        </>
+      );
+    return (
+      <EmptyState
+        title={
+          activeTab === 'following'
+            ? 'No hay publicaciones de tus seguidos'
+            : 'Tu feed está esperando'
+        }
+        description={
+          activeTab === 'following'
+            ? 'Sigue a más personas para ver qué están compartiendo.'
+            : 'Publica tu primer tweet o sigue a otros usuarios para llenar tu feed.'
+        }
+      />
+    );
+  };
+
+  return (
+    <section>
+      <header
+        className="page-header"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 16px',
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: '20px' }}>Inicio</h1>
+        <Link
+          to="/compose"
+          className="button"
+          style={{
+            backgroundColor: 'var(--blue, #1da1f2)',
+            color: '#ffffff',
+            padding: '8px 16px',
+            fontSize: '14px',
+          }}
+        >
+          Tweet
+        </Link>
+      </header>
+
+      {/* Tabs: "Para ti" (own + followed + followers) vs "Siguiendo" (only followed) */}
+      <div className="feed-tabs">
+        <span
+          className={activeTab === 'forYou' ? 'active' : ''}
+          onClick={() => setActiveTab('forYou')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setActiveTab('forYou');
+          }}
+          style={{ cursor: 'pointer' }}
+          role="button"
+          tabIndex={0}
+        >
+          Para ti
+        </span>
+        <span
+          className={activeTab === 'following' ? 'active' : ''}
+          onClick={() => setActiveTab('following')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setActiveTab('following');
+          }}
+          style={{ cursor: 'pointer' }}
+          role="button"
+          tabIndex={0}
+        >
+          Siguiendo
+        </span>
+      </div>
+
+      {location.state?.notice && <div className="inline-notice">{location.state.notice}</div>}
+
+      {/* Live counts summary */}
+      <div className="home-profile-counts" aria-label="Resumen de seguidores y seguidos">
+        <Link to="/followers">
+          <strong>{followersCount}</strong>
+          <span>Seguidores</span>
+        </Link>
+        <Link to="/following">
+          <strong>{followingCount}</strong>
+          <span>Seguidos</span>
+        </Link>
+      </div>
+
+      {renderFeedContent()}
+    </section>
+  );
 }
