@@ -6,7 +6,6 @@ export default function Pagination({
   totalPages,
   nextPage,
   previousPage,
-  goToPage,
   page,
   pages,
   setPage,

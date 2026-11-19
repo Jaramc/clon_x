@@ -126,13 +126,19 @@ export default function ComposePage() {
             maxLength={maxLength}
             placeholder="¿Qué está pasando?"
             aria-label="Texto de la publicación"
-            autoFocus
             disabled={busy}
           />
 
           {/* Base64 image preview with removal action */}
           {imageUrl && (
-            <div style={{ position: 'relative', marginTop: '10px', width: 'fit-content', maxWidth: '100%' }}>
+            <div
+              style={{
+                position: 'relative',
+                marginTop: '10px',
+                width: 'fit-content',
+                maxWidth: '100%',
+              }}
+            >
               <img
                 src={imageUrl}
                 alt="Vista previa adjunta"
@@ -181,7 +187,10 @@ export default function ComposePage() {
             disabled={busy}
           />
 
-          <div className="compose-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div
+            className="compose-actions"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
             {/* Attachment trigger button */}
             <button
               type="button"

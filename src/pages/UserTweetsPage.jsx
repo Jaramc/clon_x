@@ -102,10 +102,7 @@ export default function UserTweetsPage() {
     let unsubscribeChirps = () => {};
 
     try {
-      const chirpsQuery = query(
-        collection(db, 'chirps_v2'),
-        where('userId', '==', targetId)
-      );
+      const chirpsQuery = query(collection(db, 'chirps_v2'), where('userId', '==', targetId));
 
       unsubscribeChirps = onSnapshot(
         chirpsQuery,
@@ -148,10 +145,13 @@ export default function UserTweetsPage() {
     const targetId = target?.id || target?.uid;
     if (!targetId) return undefined;
 
-    const unsubCounts = subscribeToFollowCounts(targetId, ({ followingCount: fCount, followersCount: folCount }) => {
-      setFollowingCount(fCount);
-      setFollowersCount(folCount);
-    });
+    const unsubCounts = subscribeToFollowCounts(
+      targetId,
+      ({ followingCount: fCount, followersCount: folCount }) => {
+        setFollowingCount(fCount);
+        setFollowersCount(folCount);
+      }
+    );
 
     let unsubStatus = () => {};
     if (currentId && currentId !== targetId) {
@@ -189,17 +189,16 @@ export default function UserTweetsPage() {
   };
 
   // Pagination for user tweets (Milestone 1 requirement: max 10)
-  const {
-    currentPage,
-    totalPages,
-    paginatedItems,
-    nextPage,
-    previousPage,
-    goToPage,
-  } = usePagination(chirps, 10);
+  const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
+    usePagination(chirps, 10);
 
   if (loading) return <Spinner />;
-  if (error) return <p className="form-error" role="alert" style={{ padding: '16px' }}>{error}</p>;
+  if (error)
+    return (
+      <p className="form-error" role="alert" style={{ padding: '16px' }}>
+        {error}
+      </p>
+    );
   if (!target) {
     return (
       <EmptyState
@@ -218,11 +217,17 @@ export default function UserTweetsPage() {
         className="page-header"
         style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px' }}
       >
-        <Link to="/feed" style={{ color: 'var(--text)', fontSize: '20px' }} aria-label="Volver al feed">
+        <Link
+          to="/feed"
+          style={{ color: 'var(--text)', fontSize: '20px' }}
+          aria-label="Volver al feed"
+        >
           ←
         </Link>
         <div>
-          <h1 style={{ margin: 0, fontSize: '20px' }}>{target.name || target.fullName || target.username}</h1>
+          <h1 style={{ margin: 0, fontSize: '20px' }}>
+            {target.name || target.fullName || target.username}
+          </h1>
           <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
             {chirps.length} {chirps.length === 1 ? 'publicación' : 'publicaciones'}
           </span>
@@ -246,13 +251,15 @@ export default function UserTweetsPage() {
             to={`/users/${encodeURIComponent(target.username)}/following`}
             style={{ textDecoration: 'none' }}
           >
-            <strong>{followingCount}</strong> <span style={{ color: 'var(--muted)' }}>Siguiendo</span>
+            <strong>{followingCount}</strong>{' '}
+            <span style={{ color: 'var(--muted)' }}>Siguiendo</span>
           </Link>
           <Link
             to={`/users/${encodeURIComponent(target.username)}/followers`}
             style={{ textDecoration: 'none' }}
           >
-            <strong>{followersCount}</strong> <span style={{ color: 'var(--muted)' }}>Seguidores</span>
+            <strong>{followersCount}</strong>{' '}
+            <span style={{ color: 'var(--muted)' }}>Seguidores</span>
           </Link>
         </div>
 
@@ -310,4 +317,3 @@ export default function UserTweetsPage() {
     </section>
   );
 }
-

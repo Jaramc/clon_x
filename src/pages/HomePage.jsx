@@ -27,10 +27,7 @@ export default function HomePage() {
 
     try {
       // 1. Real-time count of people the current user follows
-      const followingQuery = query(
-        collection(db, 'follows'),
-        where('followerId', '==', userId)
-      );
+      const followingQuery = query(collection(db, 'follows'), where('followerId', '==', userId));
       unsubFollowing = onSnapshot(
         followingQuery,
         (snapshot) => {
@@ -42,10 +39,7 @@ export default function HomePage() {
       );
 
       // 2. Real-time count of people following the current user
-      const followersQuery = query(
-        collection(db, 'follows'),
-        where('followingId', '==', userId)
-      );
+      const followersQuery = query(collection(db, 'follows'), where('followingId', '==', userId));
       unsubFollowers = onSnapshot(
         followersQuery,
         (snapshot) => {
@@ -94,7 +88,8 @@ export default function HomePage() {
           <strong>{followingCount}</strong> <span style={{ color: 'var(--muted)' }}>Siguiendo</span>
         </Link>
         <Link to="/followers" style={{ textDecoration: 'none' }}>
-          <strong>{followersCount}</strong> <span style={{ color: 'var(--muted)' }}>Seguidores</span>
+          <strong>{followersCount}</strong>{' '}
+          <span style={{ color: 'var(--muted)' }}>Seguidores</span>
         </Link>
       </div>
 

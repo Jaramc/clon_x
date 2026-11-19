@@ -117,36 +117,87 @@ export default function FollowingPage() {
   };
 
   // Filter users by search term
-  const filteredUsers = useMemo(() => {
-    return users.filter((item) =>
-      `${item.fullName || item.name || ''} ${item.username || ''}`
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    );
-  }, [users, search]);
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((item) =>
+        `${item.fullName || item.name || ''} ${item.username || ''}`
+          .toLowerCase()
+          .includes(search.toLowerCase())
+      ),
+    [users, search]
+  );
 
   // Sort followed users alphabetically by full name (Milestone 1 & 3 requirement)
-  const sortedFollowing = useMemo(() => {
-    return [...filteredUsers].sort((a, b) =>
-      (a.fullName || a.name || a.username || '').localeCompare(
-        b.fullName || b.name || b.username || '',
-        'es',
-        { sensitivity: 'base' }
-      )
-    );
-  }, [filteredUsers]);
+  const sortedFollowing = useMemo(
+    () =>
+      [...filteredUsers].sort((a, b) =>
+        (a.fullName || a.name || a.username || '').localeCompare(
+          b.fullName || b.name || b.username || '',
+          'es',
+          { sensitivity: 'base' }
+        )
+      ),
+    [filteredUsers]
+  );
 
   // Pagination with strict limit of 10 items per page
-  const {
-    currentPage,
-    totalPages,
-    paginatedItems,
-    nextPage,
-    previousPage,
-    goToPage,
-  } = usePagination(sortedFollowing, 10);
+  const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
+    usePagination(sortedFollowing, 10);
 
-  const isThirdParty = Boolean(username && targetUser && (targetUser.id || targetUser.uid) !== currentUserId);
+  const isThirdParty = Boolean(
+    username && targetUser && (targetUser.id || targetUser.uid) !== currentUserId
+  );
+
+  const renderFollowingList = () => {
+    if (loading) return <Spinner />;
+    if (error)
+      return (
+        <p className="form-error" role="alert" style={{ padding: '16px' }}>
+          {error}
+        </p>
+      );
+    if (paginatedItems.length > 0)
+      return (
+        <>
+          <div>
+            {paginatedItems.map((item) => (
+              <UserCard
+                key={item.id || item.uid}
+                user={item}
+                currentUser={currentUser}
+                followingIds={myFollowingIds}
+                onFollowChange={handleFollowChange}
+              />
+            ))}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            nextPage={nextPage}
+            previousPage={previousPage}
+            goToPage={goToPage}
+          />
+        </>
+      );
+    return (
+      <EmptyState
+        title={isThirdParty ? `@${username} aún no sigue a nadie` : 'Aún no sigues a nadie'}
+        description={
+          isThirdParty
+            ? 'Cuando este usuario siga a otras cuentas, aparecerán listadas aquí.'
+            : 'Busca un nombre de usuario arriba para comenzar a seguir.'
+        }
+      />
+    );
+  };
+
+  const getListTweetsButtonLabel = () => {
+    if (tweetsLoading) return 'Cargando publicaciones...';
+    if (showListTweets) return 'Ocultar publicaciones';
+    if (isThirdParty) return `Ver publicaciones de las personas que sigue @${username}`;
+    return 'Ver publicaciones de tus seguidos';
+  };
 
   return (
     <section>
@@ -165,9 +216,7 @@ export default function FollowingPage() {
         )}
         <div>
           <h1 style={{ margin: 0, fontSize: '20px' }}>
-            {isThirdParty
-              ? `Personas que sigue @${targetUser.username}`
-              : 'Seguidos'}
+            {isThirdParty ? `Personas que sigue @${targetUser.username}` : 'Seguidos'}
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>
             {users.length} {users.length === 1 ? 'seguido' : 'seguidos'}
@@ -193,13 +242,7 @@ export default function FollowingPage() {
           onClick={toggleListTweets}
           disabled={tweetsLoading || loading || users.length === 0}
         >
-          {tweetsLoading
-            ? 'Cargando publicaciones...'
-            : showListTweets
-            ? 'Ocultar publicaciones'
-            : isThirdParty
-            ? `Ver publicaciones de las personas que sigue @${username}`
-            : 'Ver publicaciones de tus seguidos'}
+          {getListTweetsButtonLabel()}
         </button>
       </div>
 
@@ -221,51 +264,17 @@ export default function FollowingPage() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder={isThirdParty ? `Buscar entre las personas que sigue @${username}` : 'Buscar entre los usuarios que sigues'}
+          placeholder={
+            isThirdParty
+              ? `Buscar entre las personas que sigue @${username}`
+              : 'Buscar entre los usuarios que sigues'
+          }
         />
       </div>
 
-      {loading ? (
-        <Spinner />
-      ) : error ? (
-        <p className="form-error" role="alert" style={{ padding: '16px' }}>
-          {error}
-        </p>
-      ) : paginatedItems.length > 0 ? (
-        <>
-          <div>
-            {paginatedItems.map((item) => (
-              <UserCard
-                key={item.id || item.uid}
-                user={item}
-                currentUser={currentUser}
-                followingIds={myFollowingIds}
-                onFollowChange={handleFollowChange}
-              />
-            ))}
-          </div>
-
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            nextPage={nextPage}
-            previousPage={previousPage}
-            goToPage={goToPage}
-          />
-        </>
-      ) : (
-        <EmptyState
-          title={isThirdParty ? `@${username} aún no sigue a nadie` : 'Aún no sigues a nadie'}
-          description={
-            isThirdParty
-              ? 'Cuando este usuario siga a otras cuentas, aparecerán listadas aquí.'
-              : 'Busca un nombre de usuario arriba para comenzar a seguir.'
-          }
-        />
-      )}
+      {renderFollowingList()}
 
       <Toast toast={toast} onClose={clearToast} />
     </section>
   );
 }
-

@@ -47,8 +47,15 @@ export default function FollowSearchForm({ onFollowSuccess }) {
   };
 
   return (
-    <form className="follow-search" onSubmit={handleSubmit} style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
-      <label htmlFor="follow-search-input" style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '8px' }}>
+    <form
+      className="follow-search"
+      onSubmit={handleSubmit}
+      style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}
+    >
+      <label
+        htmlFor="follow-search-input"
+        style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '8px' }}
+      >
         Seguir por nombre de usuario (@username)
       </label>
 

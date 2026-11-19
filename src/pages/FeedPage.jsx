@@ -50,10 +50,7 @@ export default function FeedPage() {
             if (!active) return;
             const updated = snapshot.docs
               .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              );
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             setRawTweets(updated);
           },
           (err) => {
@@ -89,10 +86,7 @@ export default function FeedPage() {
     let unsubFollowers = () => {};
 
     try {
-      const followingQuery = query(
-        collection(db, 'follows'),
-        where('followerId', '==', userId)
-      );
+      const followingQuery = query(collection(db, 'follows'), where('followerId', '==', userId));
       unsubFollowing = onSnapshot(
         followingQuery,
         (snapshot) => {
@@ -108,10 +102,7 @@ export default function FeedPage() {
         }
       );
 
-      const followersQuery = query(
-        collection(db, 'follows'),
-        where('followingId', '==', userId)
-      );
+      const followersQuery = query(collection(db, 'follows'), where('followingId', '==', userId));
       unsubFollowers = onSnapshot(
         followersQuery,
         (snapshot) => {
@@ -150,21 +141,54 @@ export default function FeedPage() {
 
     return rawTweets
       .filter((chirp) => targetSet.has(chirp.userId || chirp.uid))
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [rawTweets, userId, followedIds, followerIds, activeTab]);
 
   // 4. Milestone 1 requirement: pagination with max 10 items
-  const {
-    currentPage,
-    totalPages,
-    paginatedItems,
-    nextPage,
-    previousPage,
-    goToPage,
-  } = usePagination(filteredChirps, 10);
+  const { currentPage, totalPages, paginatedItems, nextPage, previousPage, goToPage } =
+    usePagination(filteredChirps, 10);
+
+  const renderFeedContent = () => {
+    if (loading) return <Spinner />;
+    if (error)
+      return (
+        <p className="form-error" role="alert" style={{ padding: '16px' }}>
+          {error}
+        </p>
+      );
+    if (paginatedItems.length)
+      return (
+        <>
+          <div>
+            {paginatedItems.map((chirp) => (
+              <TweetCard key={chirp.id} tweet={chirp} />
+            ))}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            nextPage={nextPage}
+            previousPage={previousPage}
+            goToPage={goToPage}
+          />
+        </>
+      );
+    return (
+      <EmptyState
+        title={
+          activeTab === 'following'
+            ? 'No hay publicaciones de tus seguidos'
+            : 'Tu feed está esperando'
+        }
+        description={
+          activeTab === 'following'
+            ? 'Sigue a más personas para ver qué están compartiendo.'
+            : 'Publica tu primer tweet o sigue a otros usuarios para llenar tu feed.'
+        }
+      />
+    );
+  };
 
   return (
     <section>
@@ -197,6 +221,9 @@ export default function FeedPage() {
         <span
           className={activeTab === 'forYou' ? 'active' : ''}
           onClick={() => setActiveTab('forYou')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setActiveTab('forYou');
+          }}
           style={{ cursor: 'pointer' }}
           role="button"
           tabIndex={0}
@@ -206,6 +233,9 @@ export default function FeedPage() {
         <span
           className={activeTab === 'following' ? 'active' : ''}
           onClick={() => setActiveTab('following')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setActiveTab('following');
+          }}
           style={{ cursor: 'pointer' }}
           role="button"
           tabIndex={0}
@@ -214,9 +244,7 @@ export default function FeedPage() {
         </span>
       </div>
 
-      {location.state?.notice && (
-        <div className="inline-notice">{location.state.notice}</div>
-      )}
+      {location.state?.notice && <div className="inline-notice">{location.state.notice}</div>}
 
       {/* Live counts summary */}
       <div className="home-profile-counts" aria-label="Resumen de seguidores y seguidos">
@@ -230,42 +258,7 @@ export default function FeedPage() {
         </Link>
       </div>
 
-      {loading ? (
-        <Spinner />
-      ) : error ? (
-        <p className="form-error" role="alert" style={{ padding: '16px' }}>
-          {error}
-        </p>
-      ) : paginatedItems.length ? (
-        <>
-          <div>
-            {paginatedItems.map((chirp) => (
-              <TweetCard key={chirp.id} tweet={chirp} />
-            ))}
-          </div>
-
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            nextPage={nextPage}
-            previousPage={previousPage}
-            goToPage={goToPage}
-          />
-        </>
-      ) : (
-        <EmptyState
-          title={
-            activeTab === 'following'
-              ? 'No hay publicaciones de tus seguidos'
-              : 'Tu feed está esperando'
-          }
-          description={
-            activeTab === 'following'
-              ? 'Sigue a más personas para ver qué están compartiendo.'
-              : 'Publica tu primer tweet o sigue a otros usuarios para llenar tu feed.'
-          }
-        />
-      )}
+      {renderFeedContent()}
     </section>
   );
 }

@@ -16,7 +16,7 @@ const USERNAME_MAX_LENGTH = 20;
 
 // Retrieve current session profile from Firestore
 export async function getSession() {
-  const currentUser = auth.currentUser;
+  const { currentUser } = auth;
   if (!currentUser) return null;
 
   try {
@@ -81,9 +81,7 @@ export async function registerUser(values) {
     }
 
     if (error.code === 'permission-denied') {
-      throw new Error(
-        'Firebase no permite guardar el perfil. Revisa las reglas de Firestore.'
-      );
+      throw new Error('Firebase no permite guardar el perfil. Revisa las reglas de Firestore.');
     }
 
     throw error;
@@ -104,19 +102,13 @@ export async function loginUser(identifier, password) {
       email = userProfile.email;
     }
 
-    const credential = await signInWithEmailAndPassword(
-      auth,
-      email.toLowerCase(),
-      password
-    );
+    const credential = await signInWithEmailAndPassword(auth, email.toLowerCase(), password);
 
     const snapshot = await getDoc(doc(db, 'users', credential.user.uid));
 
     if (!snapshot.exists()) {
       await signOut(auth);
-      throw new Error(
-        'La cuenta existe, pero no tiene un perfil registrado en Firestore.'
-      );
+      throw new Error('La cuenta existe, pero no tiene un perfil registrado en Firestore.');
     }
 
     return {
@@ -136,6 +128,14 @@ export async function loginUser(identifier, password) {
 
     throw error;
   }
+}
+
+// Build a username that matches the registration rule ^[a-zA-Z0-9_]{3,20}$
+function buildGoogleUsername(email) {
+  const cleaned = normalizeUsername(email.split('@')[0] || '')
+    .replace(/[^a-z0-9_]/g, '_')
+    .slice(0, USERNAME_MAX_LENGTH);
+  return cleaned.length >= 3 ? cleaned : `user_${cleaned}`.slice(0, USERNAME_MAX_LENGTH);
 }
 
 // Sign in or register with Google popup and automatically create Firestore profile
@@ -160,6 +160,7 @@ export async function loginWithGoogle() {
     let username = baseUsername;
     let suffix = 1;
 
+    // eslint-disable-next-line no-await-in-loop -- each check depends on the previous suffix
     while (await getUserByUsername(username)) {
       const suffixText = String(suffix);
       username = `${baseUsername.slice(0, USERNAME_MAX_LENGTH - suffixText.length)}${suffixText}`;
@@ -176,14 +177,6 @@ export async function loginWithGoogle() {
     await signOut(auth).catch(() => {});
     throw error;
   }
-}
-
-// Build a username that matches the registration rule ^[a-zA-Z0-9_]{3,20}$
-function buildGoogleUsername(email) {
-  const cleaned = normalizeUsername(email.split('@')[0] || '')
-    .replace(/[^a-z0-9_]/g, '_')
-    .slice(0, USERNAME_MAX_LENGTH);
-  return cleaned.length >= 3 ? cleaned : `user_${cleaned}`.slice(0, USERNAME_MAX_LENGTH);
 }
 
 // Sign out current authenticated user
