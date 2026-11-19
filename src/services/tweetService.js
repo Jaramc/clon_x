@@ -1,10 +1,4 @@
-import {
-  addDoc,
-  collection,
-  getDocs,
-  query,
-  where,
-} from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { MAX_TWEET_LENGTH } from '../lib/validators';
 import { mockTweets } from '../mocks/mockTweets';
@@ -43,10 +37,7 @@ export function getFeed() {
 export async function getTweetsByUser(userId) {
   if (!userId) return [];
   try {
-    const chirpsQuery = query(
-      collection(db, CHIRPS_COLLECTION),
-      where('userId', '==', userId)
-    );
+    const chirpsQuery = query(collection(db, CHIRPS_COLLECTION), where('userId', '==', userId));
     const snapshot = await getDocs(chirpsQuery);
     if (!snapshot.empty) {
       return snapshot.docs
@@ -69,7 +60,8 @@ export async function createTweet(user, text, imageUrl = null) {
   const content = typeof user === 'string' ? user : text;
   const trimmed = (content || '').trim();
 
-  if (!trimmed && !imageUrl) throw new Error('Escribe algo o adjunta una imagen antes de publicar.');
+  if (!trimmed && !imageUrl)
+    throw new Error('Escribe algo o adjunta una imagen antes de publicar.');
   if (trimmed.length > (MAX_TWEET_LENGTH || 280)) {
     throw new Error('La publicación no puede superar los 280 caracteres.');
   }

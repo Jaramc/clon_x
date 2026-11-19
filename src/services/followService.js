@@ -25,10 +25,7 @@ function getAuthenticatedUserId() {
 
 async function getFollowDocuments(field, userId) {
   try {
-    const followsQuery = query(
-      collection(db, FOLLOWS_COLLECTION),
-      where(field, '==', userId)
-    );
+    const followsQuery = query(collection(db, FOLLOWS_COLLECTION), where(field, '==', userId));
     const snapshot = await getDocs(followsQuery);
     return snapshot.docs.map((item) => ({
       id: item.id,
@@ -72,19 +69,14 @@ export async function getFollowingUsers(userId) {
       if (!userMap.has(uid)) userMap.set(uid, u);
     });
 
-    const result = [];
-    for (const id of ids) {
-      if (userMap.has(id)) {
-        result.push(userMap.get(id));
-      } else {
+    const resolved = await Promise.all(
+      ids.map(async (id) => {
+        if (userMap.has(id)) return userMap.get(id);
         const fetched = await getUserById(id);
-        if (fetched) {
-          userMap.set(id, fetched);
-          result.push(fetched);
-        }
-      }
-    }
-    return result;
+        return fetched || null;
+      })
+    );
+    return resolved.filter(Boolean);
   } catch (error) {
     console.warn('Falling back to mock users for following list:', error.message);
     return mockUsers.filter((u) => ids.includes(u.uid || u.id));
@@ -110,19 +102,14 @@ export async function getFollowerUsers(userId) {
       if (!userMap.has(uid)) userMap.set(uid, u);
     });
 
-    const result = [];
-    for (const id of ids) {
-      if (userMap.has(id)) {
-        result.push(userMap.get(id));
-      } else {
+    const resolved = await Promise.all(
+      ids.map(async (id) => {
+        if (userMap.has(id)) return userMap.get(id);
         const fetched = await getUserById(id);
-        if (fetched) {
-          userMap.set(id, fetched);
-          result.push(fetched);
-        }
-      }
-    }
-    return result;
+        return fetched || null;
+      })
+    );
+    return resolved.filter(Boolean);
   } catch (error) {
     console.warn('Falling back to mock users for followers list:', error.message);
     return mockUsers.filter((u) => ids.includes(u.uid || u.id));

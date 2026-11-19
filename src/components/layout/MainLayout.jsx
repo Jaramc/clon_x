@@ -6,9 +6,7 @@ export default function MainLayout({ children }) {
   return (
     <div className="app-shell">
       <Header />
-      <main className="main-column">
-        {children || <Outlet />}
-      </main>
+      <main className="main-column">{children || <Outlet />}</main>
       <aside className="right-column">
         <div className="side-panel">
           <h3>¿Qué está pasando?</h3>
@@ -17,8 +15,7 @@ export default function MainLayout({ children }) {
         </div>
         <div className="side-footer">
           Condiciones · Privacidad · Accesibilidad
-          <br />
-          © 2026 Clon X
+          <br />© 2026 Clon X
         </div>
       </aside>
     </div>

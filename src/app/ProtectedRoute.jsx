@@ -7,7 +7,11 @@ export default function ProtectedRoute({ children }) {
   const location = useLocation();
 
   if (loading) {
-    return <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>Cargando sesión...</div>;
+    return (
+      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>
+        Cargando sesión...
+      </div>
+    );
   }
 
   if (!user) {

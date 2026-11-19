@@ -32,16 +32,15 @@ export default function UserCard({
       </div>
 
       <div className="user-actions">
-        {children || (
-          currentUser && currentId !== targetId && (
+        {children ||
+          (currentUser && currentId !== targetId && (
             <FollowButton
               user={user}
               currentUser={currentUser}
               following={isFollowing}
               onChange={onFollowChange}
             />
-          )
-        )}
+          ))}
       </div>
     </article>
   );

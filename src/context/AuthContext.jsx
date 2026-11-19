@@ -1,18 +1,8 @@
-import {
-  createContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import {
-  loginUser,
-  logoutUser,
-  registerUser,
-  loginWithGoogle,
-} from '../services/authService';
+import { loginUser, logoutUser, registerUser, loginWithGoogle } from '../services/authService';
 
 export const AuthContext = createContext(null);
 
@@ -86,11 +76,7 @@ export function AuthProvider({ children }) {
     [user, loading]
   );
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export default AuthContext;

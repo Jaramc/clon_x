@@ -1,5 +1,5 @@
 import { collection, doc, getDoc, getDocs, query, runTransaction, where } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { normalizeUsername } from '../lib/validators';
 import { mockUsers } from '../mocks/mockUsers';
 
@@ -52,9 +52,7 @@ export async function getUserByUsername(username) {
   }
 
   // 3. Fallback to mock users for testing
-  const foundMock = mockUsers.find(
-    (u) => normalizeUsername(u.username) === normalized
-  );
+  const foundMock = mockUsers.find((u) => normalizeUsername(u.username) === normalized);
   return foundMock || null;
 }
 

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import UserCard from './UserCard';
 import FollowButton from './FollowButton';
@@ -23,9 +22,7 @@ function FollowDemo() {
     }))
   );
 
-  const [counts, setCounts] = useState(() =>
-    getFollowCounts(currentUserId)
-  );
+  const [counts, setCounts] = useState(() => getFollowCounts(currentUserId));
 
   const handleToggle = async (uid) => {
     if (uid === currentUserId) {

@@ -65,15 +65,20 @@ export default function FollowButton({
 
   const getButtonClass = () => {
     if (activeFollowing) {
-      return isHovered
-        ? 'button button--outline button--danger'
-        : 'button button--outline';
+      return isHovered ? 'button button--outline button--danger' : 'button button--outline';
     }
     return 'button';
   };
 
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+    <div
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        gap: '4px',
+        alignItems: 'flex-start',
+      }}
+    >
       <button
         type="button"
         className={getButtonClass()}
@@ -101,4 +106,3 @@ export default function FollowButton({
     </div>
   );
 }
-
